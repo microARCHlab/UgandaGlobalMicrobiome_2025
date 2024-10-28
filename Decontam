@@ -1,0 +1,189 @@
+## Iyunoluwa Ademola-Popoola 
+### August 13th, 2024
+## This Decontam script is for data where the metadata has more samples than the biom table
+
+# Load necessary libraries
+library(installr)
+library(decontam); packageVersion("decontam") ## ‘1.16.0’ 
+library(phyloseq); packageVersion("phyloseq") ## ‘1.40.0’ 
+library(ggplot2); packageVersion("ggplot2") ##‘3.4.4’
+library(decontam)
+library(qiime2R)
+library(tidyverse); packageVersion("tidyverse")
+library(dplyr)
+library(tidyr)
+library(ggthemes)
+library(extrafont)
+library(scales)
+library(reshape2)
+library(ggplot2)
+library(RColorBrewer)
+library(ggpubr)
+library(melt)
+library(metagMisc); packageVersion("metagMisc") ## ‘0.5.0’
+library(data.table)
+library(plyr); packageVersion("plyr")  ## ‘1.8.9’
+library(metamisc); packageVersion("metamisc") ##‘0.4.0’       
+library(data.table)
+library(metagMisc); packageVersion("metagMisc") ## ‘0.5.0’
+
+# Import metadata using read.table
+METADATA <- read.table("Global_merged_metadata2.txt", header = TRUE, sep = "\t", quote = "", fill = TRUE)
+
+# Ensure metadata has unique sample names and no empty names
+METADATA <- METADATA %>%
+  filter(!is.na(sample_name) & sample_name != "") %>%
+  distinct(sample_name, .keep_all = TRUE)
+
+# Convert to sample_data object
+sample_data <- sample_data(METADATA)
+rownames(sample_data) <- sample_data$sample_name
+
+# Import species table
+Species <- import_biom("Global_Jordan.txt_json.biom")
+
+# Import taxonomy
+Silva_taxonomy <- read_qza("taxonomy.qza")
+
+# Separate the headers for the GG taxonomy file
+taxatable <- Silva_taxonomy$data %>%
+  as_tibble() %>%
+  separate(Taxon, sep = ";", into = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species"))
+
+# Ensure the taxonomy table has OTU IDs as rownames
+taxatable <- taxatable %>%
+  column_to_rownames("Feature.ID")
+
+# Get sample names from both metadata and species table
+metadata_samples <- rownames(sample_data)
+species_samples <- sample_names(Species)
+
+# Find common samples
+common_samples <- intersect(metadata_samples, species_samples)
+
+# Subset metadata and species table to include only common samples
+sample_data <- sample_data[common_samples, ]
+Species <- prune_samples(common_samples, Species)
+
+# Convert taxatable to a matrix to avoid coercion warning
+taxatable <- as.matrix(taxatable)
+
+# Create the phyloseq object
+phyloseq_species <- phyloseq(Species, sample_data, tax_table(taxatable))
+
+
+
+
+# I proceeded to identify the prevalence of contaminants
+sample_data(phyloseq_species)$is.neg <- sample_data(phyloseq_species)$SampleType == "EBC1" | sample_data(phyloseq_species)$SampleType == "PCR"
+
+# Identify contaminants with different thresholds
+contamdf_prev <- isContaminant(phyloseq_species, method = "prevalence", neg = "is.neg")
+contamdf_prev9 <- isContaminant(phyloseq_species, method = "prevalence", neg = "is.neg", threshold = 0.9)
+contamdf_prev5 <- isContaminant(phyloseq_species, method = "prevalence", neg = "is.neg", threshold = 0.5)
+contamdf_prev55 <- isContaminant(phyloseq_species, method = "prevalence", neg = "is.neg", threshold = 0.55)
+contamdf_prev60 <- isContaminant(phyloseq_species, method = "prevalence", neg = "is.neg", threshold = 0.60)
+contamdf_prev65 <- isContaminant(phyloseq_species, method = "prevalence", neg = "is.neg", threshold = 0.65)
+
+# Ensure taxonomy is in a dataframe format with OTU IDs as row names
+taxatable_df <- as.data.frame(taxatable)
+taxatable_df <- tibble::rownames_to_column(taxatable_df, "OTU_ID")
+
+# Merge contamination data with taxonomy data
+contamdf_prev_taxa <- merge(contamdf_prev, taxatable_df, by.x = "row.names", by.y = "OTU_ID")
+contamdf_prev9_taxa <- merge(contamdf_prev9, taxatable_df, by.x = "row.names", by.y = "OTU_ID")
+contamdf_prev5_taxa <- merge(contamdf_prev5, taxatable_df, by.x = "row.names", by.y = "OTU_ID")
+contamdf_prev55_taxa <- merge(contamdf_prev55, taxatable_df, by.x = "row.names", by.y = "OTU_ID")
+contamdf_prev60_taxa <- merge(contamdf_prev60, taxatable_df, by.x = "row.names", by.y = "OTU_ID")
+contamdf_prev65_taxa <- merge(contamdf_prev65, taxatable_df, by.x = "row.names", by.y = "OTU_ID")
+
+# Export the contamination data with taxa names
+write.table(contamdf_prev_taxa, "contami.txt", sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
+write.table(contamdf_prev9_taxa, "contami9.txt", sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
+write.table(contamdf_prev5_taxa, "contami5.txt", sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
+write.table(contamdf_prev55_taxa, "contami55.txt", sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
+write.table(contamdf_prev60_taxa, "contami60.txt", sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
+write.table(contamdf_prev65_taxa, "contami65.txt", sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
+
+
+# Visualizing the contaminants
+ps_pa <- transform_sample_counts(phyloseq_species, function(abund) 1 * (abund > 0))
+ps_pa_neg <- prune_samples(sample_data(ps_pa)$SampleType == "EBC1" | sample_data(ps_pa)$SampleType == "PCR", ps_pa)
+ps_pa_pos <- prune_samples(sample_data(ps_pa)$SampleType == "Sample", ps_pa)
+
+df_pa <- data.frame(pa.pos = taxa_sums(ps_pa_pos), pa.neg = taxa_sums(ps_pa_neg), contaminant = contamdf_prev$contaminant)
+ggplot(data = df_pa, aes(x = pa.neg, y = pa.pos, color = contaminant)) +
+  geom_point() +
+  xlab("Prevalence (Negative Controls)") +
+  ylab("Prevalence (Samples)")
+
+df_pa_9 <- data.frame(pa.pos = taxa_sums(ps_pa_pos), pa.neg = taxa_sums(ps_pa_neg), contaminant = contamdf_prev9$contaminant)
+ggplot(data = df_pa_9, aes(x = pa.neg, y = pa.pos, color = contaminant)) +
+  geom_point() +
+  xlab("Prevalence (Negative Controls)") +
+  ylab("Prevalence (Samples)")
+
+df_pa_5 <- data.frame(pa.pos = taxa_sums(ps_pa_pos), pa.neg = taxa_sums(ps_pa_neg), contaminant = contamdf_prev5$contaminant)
+ggplot(data = df_pa_5, aes(x = pa.neg, y = pa.pos, color = contaminant)) +
+  geom_point() +
+  xlab("Prevalence (Negative Controls)") +
+  ylab("Prevalence (Samples)")
+
+df_pa_55 <- data.frame(pa.pos = taxa_sums(ps_pa_pos), pa.neg = taxa_sums(ps_pa_neg), contaminant = contamdf_prev55$contaminant)
+ggplot(data = df_pa_55, aes(x = pa.neg, y = pa.pos, color = contaminant)) +
+  geom_point() +
+  xlab("Prevalence (Negative Controls)") +
+  ylab("Prevalence (Samples)")
+
+df_pa_60 <- data.frame(pa.pos = taxa_sums(ps_pa_pos), pa.neg = taxa_sums(ps_pa_neg), contaminant = contamdf_prev60$contaminant)
+ggplot(data = df_pa_60, aes(x = pa.neg, y = pa.pos, color = contaminant)) +
+  geom_point() +
+  xlab("Prevalence (Negative Controls)") +
+  ylab("Prevalence (Samples)")
+
+df_pa_65 <- data.frame(pa.pos = taxa_sums(ps_pa_pos), pa.neg = taxa_sums(ps_pa_neg), contaminant = contamdf_prev65$contaminant)
+ggplot(data = df_pa_65, aes(x = pa.neg, y = pa.pos, color = contaminant)) +
+  geom_point() +
+  xlab("Prevalence (Negative Controls)") +
+  ylab("Prevalence (Samples)")
+
+# Setting the data into a dataframe and adding a library size column to the data
+Global_EBC_df <- as.data.frame(sample_data(phyloseq_species))
+Global_EBC_df$LibrarySize <- sample_sums(phyloseq_species)
+
+# Creating a visualization of where the controls fall in comparison to the samples of their sequences/library size
+Global_EBC_df <- Global_EBC_df[order(Global_EBC_df$LibrarySize), ]
+Global_EBC_df$index <- seq(nrow(Global_EBC_df))
+ggplot(data = Global_EBC_df, aes(x = index, y = LibrarySize, color = SampleType)) +
+  geom_point()
+
+# Assign taxonomy to the contaminants
+taxonomy <- parse_taxonomy(Silva_taxonomy$data)
+taxonomy <- tibble::rownames_to_column(taxonomy, "featureID")
+Global_contamdf_prev65 <- tibble::rownames_to_column(contamdf_prev65, "featureID")
+Global_contamdf_prev9 <- tibble::rownames_to_column(contamdf_prev9, "featureID")
+Global_contamdf_prev5 <- tibble::rownames_to_column(contamdf_prev5, "featureID")
+Global_contamdf_prev55 <- tibble::rownames_to_column(contamdf_prev55, "featureID")
+
+# Merging tables to know the taxonomy of the contaminants
+contaminants65_taxonomy <- dplyr::semi_join(taxonomy, Global_contamdf_prev65, by = "featureID")
+contaminants9_taxonomy <- dplyr::semi_join(taxonomy, Global_contamdf_prev9, by = "featureID")
+contaminants5_taxonomy <- dplyr::semi_join(taxonomy, Global_contamdf_prev5, by = "featureID")
+contaminants55_taxonomy <- dplyr::semi_join(taxonomy, Global_contamdf_prev55, by = "featureID")
+
+# Exporting the taxonomy of contaminants
+write.table(contaminants65_taxonomy, file = "Global_contamdf.prev65.csv", sep = ",", quote = FALSE, col.names = TRUE, row.names = TRUE)
+write.table(contaminants9_taxonomy, file = "Global_contamdf.prev9.csv", sep = ",", quote = FALSE, col.names = TRUE, row.names = TRUE)
+write.table(contaminants5_taxonomy, file = "Global_contamdf.prev5.csv", sep = ",", quote = FALSE, col.names = TRUE, row.names = TRUE)
+write.table(contaminants55_taxonomy, file = "Global_contamdf.prev55.csv", sep = ",", quote = FALSE, col.names = TRUE, row.names = TRUE)
+
+#  Pruning based on 0.60 threshold
+phyloseq_species_pruned_60 <- prune_taxa(!df_pa_60$contaminant, phyloseq_species)
+phyloseq_species_pruned_60
+
+# Convert to dataframe and export
+Globaldecontam_60_df <- phyloseq_to_df(phyloseq_species_pruned_60, addtax = FALSE, addtot = FALSE, addmaxrank = FALSE, sorting = "NULL")
+colnames(Globaldecontam_60_df) <- gsub(pattern = "X", replacement = "", x = colnames(Globaldecontam_60_df))
+
+# Export the final table for analysis based on 0.60 threshold
+write.table(Globaldecontam_60_df, "GlobalSpecies60_decontam_60.txt", sep = "\t")

@@ -1,554 +1,259 @@
-####~/BATWA/study_raw_data_11492_020223-123348/Worldwide_analyses/WW_New/Downstream_analysis/Global_downstream_analysis_post_filtering.txt
-
-##post filtering downstream analyses
-###renamed the last filtered data for each population 
-##AGP_mental_illness_filtered.qza to AGP_final.qza
-###Global_samples_final_table-deblur.qza to Global_samples_final_final.qza
-###antibiotics_Filtered_Tanzanian.qza to Tanzania_final.qza
-###Yanomani_Saliva_Filtered.qza to Yanomani_final.qza
-###Merged all the metadata in R
-
-qiime feature-table merge \
-    --i-tables AGP_final.qza Global_samples_final_final.qza Tanzania_final.qza Yanomani_final.qza \
-    --o-merged-table Global_merged_table.qza
-
-
-    ###starting worldwide analysis
-    
-    qiime feature-table summarize \
-  --i-table Global_merged_table.qza \
-  --m-sample-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_merged_table.qzv
-  
-###A total of 636 individuals
-###111 frim Uganda, 16 from Yanomami, 44 from Tanzania, 465 from AGP
-  
-######Running core-metrics diversity
-qiime diversity core-metrics \
-  --i-table Global_merged_table.qza \
-  --p-sampling-depth 1050 \
-  --m-metadata-file Final_merged_metadata.txt \
-  --output-dir diversity-core-metrics
-
-qiime feature-table merge-seqs \
-  --i-data Tanzania_rep-seqs-deblur.qza \
-  --i-data Yanomani_rep-seqs-deblur.qza \
-  --i-data Global_samples_final_rep-seqs.qza \
-  --i-data AGP-rep-seqs-deblur.qza \
-  --o-merged-data Global_merged_rep_seqs.qza
-
-
-#############Pre-decontam#############
-
-###converting my qza to a BIOM file for decontam
-  qiime tools export \
-    --input-path Global_merged_table.qza \
-    --output-path Global_Biom/
-
-####Exported Global_merged_table.qza as BIOMV210DirFmt to directory Global_Biom/
-
-
-biom convert -i feature-table.biom -o Global_table.from_biom.txt --to-tsv
-
-###convert to JSON format
-biom convert -i Global_table.from_biom.txt -o Global_biom.txt_json.biom --table-type="OTU table" --to-json
-
-
-####proceeding to do decontam in R. 
-###Check Global_decontam_R_Script2.R
-
-
-######POST DECONTAM############
-
-
-
-
-biom convert -i GlobalSpecies55_decontam_02_26_24.txt -o Global_55.biom --table-type="OTU table" --to-hdf5
-
-##Converting to qza
-qiime tools import \
-  --input-path Global_55.biom \
-  --type 'FeatureTable[Frequency]' \
-  --input-format BIOMV210Format \
-  --output-path Global_55.qza
-  
-##visualizing the feature table post decontam
-qiime feature-table summarize \
-  --i-table Global_55.qza \
-  --o-visualization Global_55.qzv \
-  --m-sample-metadata-file Final_merged_metadata.txt
-
-##Filtering out controls (EBC1)
-qiime feature-table filter-samples \
-  --i-table Global_55.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --p-where '[SampleType] IS NOT "EBC1"' \
-  --o-filtered-table Global_55_BioSamplesOnly.qza    
-
-##Filtering out controls (EBC2)
-qiime feature-table filter-samples \
-  --i-table Global_55_BioSamplesOnly.qza   \
-  --m-metadata-file Final_merged_metadata.txt \
-  --p-where '[SampleType] IS NOT "EBC2"' \
-  --o-filtered-table Global_55_BioSamplesOnlyfinal.qza  
-
-
-##Filtering out PCR
-qiime feature-table filter-samples \
-  --i-table Global_55_BioSamplesOnlyfinal.qza     \
-  --m-metadata-file Final_merged_metadata.txt \
-  --p-where '[SampleType] IS NOT "PCR"' \
-  --o-filtered-table No_PCR_Global_55_BioSamplesOnlyfinal.qza   
-  
- ###filtering out individual 11492.A19489.TW99 who had 1071 feature counts was full of contaminants 
- 
- qiime feature-table filter-samples \
-  --i-table No_PCR_Global_55_BioSamplesOnlyfinal.qza  \
-  --m-metadata-file Final_merged_metadata.txt \
-  --p-where '[sample_name] IS NOT "11492.A19489.TW99"' \
-  --o-filtered-table no_PCR_NoTW99_Global_55_BioSamplesOnlyfinal.qza    
-  
-  
-  ###Filtering out the duplicate sample 11492.A19451.KG59e
-
- qiime feature-table filter-samples \
-  --i-table no_PCR_NoTW99_Global_55_BioSamplesOnlyfinal.qza   \
-  --m-metadata-file Final_merged_metadata.txt \
-  --p-where '[sample_name] IS NOT "11492.A19451.KG59e"' \
-  --o-filtered-table No_duplicate_Global_55_BioSamplesOnlyfinal.qza
-  
-  
- qiime feature-table filter-samples \
-  --i-table No_duplicate_Global_55_BioSamplesOnlyfinal.qza   \
-  --m-metadata-file Final_merged_metadata.txt \
-  --p-where '[sample_name] IS NOT "11492.A19450.TW51"' \
-  --o-filtered-table no_PCR_NoTW99_NOTW51__Global_55_BioSamplesOnlyfinal.qza  
-  
- qiime feature-table summarize \
-  --i-table no_PCR_NoTW99_NOTW51__Global_55_BioSamplesOnlyfinal.qza \
-  --m-sample-metadata-file Final_merged_metadata.txt \
-  --o-visualization no_PCR_NoTW99_NOTW51__Global_55_BioSamplesOnlyfinal.qzv 
-  
-####################################################################
-###filtering out singletons. These are features that appear in only one sample
-qiime feature-table filter-features \
-  --i-table no_PCR_NoTW99_NOTW51__Global_55_BioSamplesOnlyfinal.qza \
-  --p-min-frequency 2 \
-  --o-filtered-table table_no_singletons.qza
-
- qiime feature-table summarize \
-  --i-table table_no_singletons.qza \
-  --m-sample-metadata-file Final_merged_metadata.txt \
-  --o-visualization table_no_singletons.qzv
-  
-   qiime feature-table summarize \
-  --i-table Global_merged_rep_seqs.qza \
-  --o-visualization Global_merged_rep_seqs.qzv
-  
-  
-###BLAST my sequences against silva
-
-qiime feature-classifier classify-sklearn \
-  --i-classifier silva-138-99-515-806-nb-classifier.qza \
-  --i-reads Global_merged_rep_seqs.qza \
-  --o-classification taxonomy.qza
-qiime metadata tabulate \
-  --m-input-file taxonomy.qza \
-  --o-visualization taxonomy.qzv 
-  
-  
-  
-  ###Filtering out chloroplast and mitochrondia
-  qiime taxa filter-table \
-  --i-table no_PCR_NoTW99_NOTW51__Global_55_BioSamplesOnlyfinal.qza \
-  --i-taxonomy taxonomy.qza \
-  --p-exclude mitochondria,chloroplast \
-  --o-filtered-table No_C_M_6_Global_55_BioSamplesOnlyfinal.qza
-  
-####This did not work
-
-
-
- ################################################################################# 
-
-###splitting the dataset per population to identify the data with the problems
-
-
-####UGANDA####
-qiime feature-table filter-samples \
-  --i-table no_PCR_NoTW99_NOTW51__Global_55_BioSamplesOnlyfinal.qza     \
-  --m-metadata-file Final_merged_metadata.txt \
---p-where '[country] IN ("Uganda")' \
-  --o-filtered-table Uganda_trial.qza
-
-    qiime feature-table summarize \
-  --i-table Uganda_trial.qza \
- --m-sample-metadata-file Final_merged_metadata.txt \
-  --o-visualization Uganda_trial.qzv
-  
-  qiime taxa filter-table \
-  --i-table Uganda_trial.qza \
-  --i-taxonomy taxonomy.qza \
-  --p-exclude mitochondria,chloroplast \
-  --o-filtered-table No_C_M_6_Uganda.qza
-
-####Uganda did not pop up an error
-
-
-####AGP####
-qiime feature-table filter-samples \
-  --i-table no_PCR_NoTW99_NOTW51__Global_55_BioSamplesOnlyfinal.qza     \
-  --m-metadata-file Final_merged_metadata.txt \
---p-where '[country] IN ("American_Gut_Project_Mouth_sample")' \
-  --o-filtered-table AGP_trial.qza
-
-    qiime feature-table summarize \
-  --i-table AGP_trial.qza \
- --m-sample-metadata-file Final_merged_metadata.txt \
-  --o-visualization AGP_trial.qzv
-  
-
-  
-  qiime taxa filter-table \
-  --i-table AGP_trial.qza \
-  --i-taxonomy taxonomy.qza \
-  --p-exclude mitochondria,chloroplast \
-  --o-filtered-table No_C_M_6_AGP.qza
-
-####AGP popped up an error
-
-###BLAST my sequences against silva
-
-qiime feature-classifier classify-sklearn \
-  --i-classifier silva-138-99-515-806-nb-classifier.qza \
-  --i-reads AGP-rep-seqs-deblur.qza \
-  --o-classification AGP_taxonomy.qza
-qiime metadata tabulate \
-  --m-input-file AGP_taxonomy.qza \
-  --o-visualization AGP_taxonomy.qzv
-  
-  
-  qiime taxa filter-table \
-  --i-table AGP_trial.qza \
-  --i-taxonomy AGP_taxonomy.qza \
-  --p-exclude mitochondria,chloroplast \
-  --o-filtered-table Trial_No_C_M_6_AGP.qza
-
-  
-   qiime metadata tabulate \
-  --m-input-file Global_merged_rep_seqs.qza \
-  --o-visualization Global_merged_rep_seqs.qzv
-  
-  qiime metadata tabulate \
-  --m-input-file AGP-rep-seqs-deblur.qza \
-  --o-visualization AGP-rep-seqs-deblur.qzv
-   ################################################################################# 
-
-  
-####filtering out the featureIDs not present in my taxonomy file###
-
-qiime feature-table filter-features \
-  --i-table no_PCR_NoTW99_NOTW51__Global_55_BioSamplesOnlyfinal.qza \
-  --m-metadata-file AGP_FeatureID.txt \
-  --o-filtered-table Global_Feature-filtered.qza  \
-  --p-exclude-ids
-
-  
-  qiime feature-table summarize \
-  --i-table Global_Feature-filtered.qza \
-    --m-sample-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_Feature-filtered.qzv 
-  
-  
- ################################################################################# 
-   ###Filtering out chloroplast and mitochrondia
-  qiime taxa filter-table \
-  --i-table Global_Feature-filtered.qza \
-  --i-taxonomy taxonomy.qza \
-  --p-exclude mitochondria,chloroplast \
-  --o-filtered-table Global_Feature-filtered_No_C_M.qza
-  
-      qiime feature-table summarize \
-  --i-table Global_Feature-filtered_No_C_M.qza \
- --m-sample-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_Feature-filtered_No_C_M.qzv
-  
- ################################################################################# 
-###creating a phylogentic tree
-qiime phylogeny align-to-tree-mafft-fasttree \
-  --i-sequences Global_merged_rep_seqs.qza \
-  --output-dir Global_phylogeny-align-to-tree-mafft-fasttree
-
-###core metrics 
-qiime diversity core-metrics-phylogenetic \
-  --i-phylogeny Global_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
-  --i-table Global_Feature-filtered_No_C_M.qza \
-  --p-sampling-depth 1151 \
-  --m-metadata-file Final_merged_metadata.txt \
-  --output-dir Global_diversity-core-metrics-phylogenetic
-  
-  
-  qiime diversity alpha-group-significance \
-  --i-alpha-diversity Global_diversity-core-metrics-phylogenetic/faith_pd_vector.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_faith-pd-group-significance.qzv
-
-  qiime diversity beta-group-significance \
-  --i-distance-matrix Global_diversity-core-metrics-phylogenetic/unweighted_unifrac_distance_matrix.qza\
-  --m-metadata-file Final_merged_metadata.txt \
-  --m-metadata-column country \
-  --p-pairwise \
-  --o-visualization Country_unweighted-unifrac-group-significance.qzv
-  
-  
-#######Normalizing using alpha-rarefaction
-
-qiime diversity alpha-rarefaction \
-  --i-table Global_Feature-filtered_No_C_M.qza \
-  --i-phylogeny Global_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
-  --p-max-depth 1151 \
-  --m-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_alpha-rarefaction.qzv
-
-
-####################################################
-qiime composition add-pseudocount \
-  --i-table Global_Feature-filtered_No_C_M.qza \
-  --o-composition-table comp-Global_Feature-filtered_No_C_M.qza
-
-#####ANCOM
-qiime composition ancom \
-  --i-table comp-Global_Feature-filtered_No_C_M.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --m-metadata-column country \
-  --o-visualization ancom-country.qzv
-
-
-qiime taxa collapse \
-  --i-table Global_Feature-filtered_No_C_M.qza \
-  --i-taxonomy taxonomy.qza \
-  --p-level 6 \
-  --o-collapsed-table Global_Feature-filtered_No_C_M-table-l6.qza
-qiime composition add-pseudocount \
-  --i-table Global_Feature-filtered_No_C_M-table-l6.qza \
-  --o-composition-table comp-Global_Feature-filtered_No_C_M-table-l6.qza
-qiime composition ancom \
-  --i-table comp-Global_Feature-filtered_No_C_M-table-l6.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --m-metadata-column country \
-  --o-visualization Global-l6-ancom-country.qzv
-
-
-
-####TAXA BARPLOT
-
- 
-  qiime taxa barplot \
-  --i-table Global_Feature-filtered_No_C_M.qza  \
-  --i-taxonomy taxonomy.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_Bar_Plot.qzv
-  
-  
-  ######running DEICODE/ Aitchison Distance ---"Denoising and Quality Control of High-dimensional Microbiome Data."
- qiime deicode rpca \
-    --i-table Global_Feature-filtered_No_C_M.qza  \
-    --p-min-feature-count 10 \
-    --p-min-sample-count 500 \
-    --o-biplot New_C_M_Global_ordination.qza \
-    --o-distance-matrix New_C_M_Global_distance.qza
-
-qiime emperor biplot \
-    --i-biplot New_C_M_Global_ordination.qza \
-    --m-sample-metadata-file Final_merged_metadata.txt \
-    --m-feature-metadata-file taxonomy.qza \
-    --o-visualization New_C_M_Global_biplot.qzv \
-    --p-number-of-features 8
-
-qiime diversity beta-group-significance \
-    --i-distance-matrix New_C_M_Global_distance.qza \
-    --m-metadata-file Final_merged_metadata.txt \
-    --m-metadata-column country \
-    --p-method permanova \
-    --o-visualization Global_Deicode_country_significance.qzv
-
-Converting my BIOM file to a text file
-qiime tools export \
-  --input-path AGP_trial.qza \
-  --output-path AGP_Trial
-
-biom convert -i AGP_Trial/feature-table.biom -o AGP-table.from_biom.txt --to-tsv
-
-
-
-
-
-
-########################################################################################
-####NEW BEGINNINGS AFTER FIGURING OUT THAT THE ISSUE WITH THE AGP WAS.
-#####NOT ALL THE SEQUENCES WERE MERGED.
-
-####MERGING THE SEQUENCES
-qiime feature-table merge-seqs \
-  --i-data Tanzania_rep-seqs-deblur.qza \
-  --i-data Yanomani_rep-seqs-deblur.qza \
-  --i-data Global_samples_final_rep-seqs.qza \
-  --i-data AGP_deblur150_7May2024-rep-seqs-deblur.qza \
-  --o-merged-data New_Global_merged_rep_seqs.qza
-
-qiime phylogeny align-to-tree-mafft-fasttree \
-  --i-sequences New_Global_merged_rep_seqs.qza \
-  --output-dir Global_samples_final_phylogeny-align-to-tree-mafft-fasttree
-  
-###BLAST my sequences against silva
-
-qiime feature-classifier classify-sklearn \
-  --i-classifier silva-138-99-515-806-nb-classifier.qza \
-  --i-reads New_Global_merged_rep_seqs.qza \
-  --o-classification Global_taxonomy.qza
-qiime metadata tabulate \
-  --m-input-file Global_taxonomy.qza \
-  --o-visualization Global_taxonomy.qzv 
-  
-  
-  
-  ###Filtering out chloroplast and mitochrondia
-  qiime taxa filter-table \
-  --i-table no_PCR_NoTW99_NOTW51__Global_55_BioSamplesOnlyfinal.qza \
-  --i-taxonomy Global_taxonomy.qza \
-  --p-exclude mitochondria,chloroplast \
-  --o-filtered-table Global_samples_final.qza
-
-    qiime feature-table summarize \
-  --i-table Global_samples_final.qza \
- --m-sample-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_samples_final.qzv
-##########################################################
-
+####2800 samples. 548 AGP, 97 Batwa, 16 Venezuela, Tanzania 43
 
 ###core-metrics
 qiime diversity core-metrics-phylogenetic \
-  --i-phylogeny Global_samples_final_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
-  --i-table Global_samples_final.qza  \
-  --p-sampling-depth 1149 \
-  --m-metadata-file Final_merged_metadata.txt \
-  --output-dir Global_samples_final
+  --i-phylogeny Global_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
+  --i-table Global_BioSamplesOnlyfinal.qza \
+  --p-sampling-depth 1144 \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --output-dir New_6_Global_BioSamplesOnlyfinal-phylogenetic
   
 ###alpha diversity
 qiime diversity alpha-group-significance \
-  --i-alpha-diversity Global_samples_final/faith_pd_vector.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_samples_final_faith-pd-group-significance.qzv
+  --i-alpha-diversity New_6_Global_BioSamplesOnlyfinal-phylogenetic/faith_pd_vector.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --o-visualization New_6_Global__faith-pd-group-significance.qzv
 qiime diversity alpha-group-significance \
-  --i-alpha-diversity Global_samples_final/evenness_vector.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_samples_final_evenness-group-significance.qzv
+  --i-alpha-diversity New_6_Global_BioSamplesOnlyfinal-phylogenetic/evenness_vector.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --o-visualization New_6_Global__evenness-group-significance.qzv
   
 ###Beta-group-significance
 qiime diversity beta-group-significance \
-  --i-distance-matrix Global_samples_final/unweighted_unifrac_distance_matrix.qza\
-  --m-metadata-file Final_merged_metadata.txt \
+  --i-distance-matrix New_6_Global_BioSamplesOnlyfinal-phylogenetic/unweighted_unifrac_distance_matrix.qza\
+  --m-metadata-file Global_merged_metadata2.txt \
   --m-metadata-column country \
   --p-pairwise \
-  --o-visualization Global_samples_final_unweighted-unifrac-country-group-significance.qzv
-  
+  --o-visualization New_6_Global__unweighted-unifrac-culture-group-significance.qzv
 
-  
+ qiime diversity beta-group-significance \
+  --i-distance-matrix  New_6_Global_BioSamplesOnlyfinal-phylogenetic/bray_curtis_distance_matrix.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --m-metadata-column population \
+  --p-pairwise \
+  --o-visualization New_6_Global_BioSamplesOnlyfinal-phylogenetic-population-bray_curtis_distance_matrix.qzv
 
   ##checking the taxonomy of the samples 
   qiime taxa barplot \
-  --i-table Global_samples_final.qza \
-  --i-taxonomy Global_taxonomy.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --o-visualization New_C_M_filtered_Global_samples_finalTaxaBarPlot.qzv
+  --i-table Global_BioSamplesOnlyfinal.qza \
+  --i-taxonomy taxonomy.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --o-visualization New_C_M_6_filtered_Global_TaxaBarPlot.qzv
   
 #ANCOM 
 
 qiime composition add-pseudocount \
-  --i-table Global_samples_final.qza  \
-  --o-composition-table comp-Global_samples_final.qza
+  --i-table Global_BioSamplesOnlyfinal.qza  \
+  --o-composition-table comp-Global_BioSamplesOnlyfinal.qza
   
 qiime composition ancom \
-  --i-table comp-Global_samples_final.qza \
-  --m-metadata-file Final_merged_metadata.txt \
+  --i-table comp-Global_BioSamplesOnlyfinal.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
   --m-metadata-column country \
-  --o-visualization comp-Global_samples_final-ancom-country.qzv
+  --o-visualization comp-New_C_M_6_Global_BioSamplesOnlyfinal-ancom-country.qzv
   
   
   
   ###genuslevel for country
 qiime taxa collapse \
-  --i-table Global_samples_final.qza  \
-  --i-taxonomy Global_taxonomy.qza \
+  --i-table Global_BioSamplesOnlyfinal.qza  \
+  --i-taxonomy taxonomy.qza \
   --p-level 6 \
-  --o-collapsed-table Global_samples_final-l6.qza
+  --o-collapsed-table New_C_M_6_Global_BioSamplesOnlyfinal-l6.qza
 qiime composition add-pseudocount \
-  --i-table Global_samples_final-l6.qza \
-  --o-composition-table comp-New_Global_samples_final-l6.qza
+  --i-table New_C_M_6_Global_BioSamplesOnlyfinal-l6.qza \
+  --o-composition-table comp-New_C_M_6_Global_BioSamplesOnlyfinal-l6.qza
 qiime composition ancom \
-  --i-table comp-New_Global_samples_final-l6.qza \
-  --m-metadata-file Final_merged_metadata.txt \
+  --i-table comp-New_C_M_6_Global_BioSamplesOnlyfinal-l6.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
   --m-metadata-column country \
-  --o-visualization comp-New_Global_samples_final-l6-ancom-country.qzv
+  --o-visualization New_C_M_6_Global_BioSamplesOnlyfinal-l6-ancom-country.qzv
   
   
      ###ANCOM for Culture
 
   qiime composition ancom \
-  --i-table comp-New_Global_samples_final-l6.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --m-metadata-column culture \
-  --o-visualization New_C_M_Global_samples_finalBioSamplesOnlyfinal-l6-ancom-culture.qzv
+  --i-table comp-New_C_M_6_Global_BioSamplesOnlyfinal-l6.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --m-metadata-column country \
+  --o-visualization New_C_M_6_Global_BioSamplesOnlyfinal-l6-ancom-culture.qzv
 
  
 #####Alpha rarefaction plotting
 qiime diversity alpha-rarefaction \
-  --i-table Global_samples_final.qza  \
-  --i-phylogeny Global_samples_final_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
-  --p-max-depth 1151 \
-  --m-metadata-file Final_merged_metadata.txt \
-  --o-visualization Global_samples_final-alpha-rarefaction.qzv
+  --i-table Global_BioSamplesOnlyfinal.qza  \
+  --i-phylogeny Global_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
+  --p-max-depth 1144 \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --o-visualization New_C_M_6_Global_-alpha-rarefaction.qzv
   
- ###running ADONIS on the collection site. Determine whether groups of samples are significantly different from one
+ ###running ADONIS on the country. Determine whether groups of samples are significantly different from one
   another using the ADONIS
    
  qiime diversity adonis \
-  --i-distance-matrix Global_bray_curtis_distance_matrix.qza \
-  --m-metadata-file Final_merged_metadata.txt \
+  --i-distance-matrix  New_6_Global_BioSamplesOnlyfinal-phylogenetic/bray_curtis_distance_matrix.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
   --p-formula "country" \
-  --o-visualization Global_country-adonis.qzv
+  --o-visualization 6_filtered_country-adonis.qzv
   
   
   
   ######running DEICODE/ Aitchison Distance ---"Denoising and Quality Control of High-dimensional Microbiome Data."
  qiime deicode rpca \
-    --i-table Global_samples_final.qza \
+    --i-table Global_BioSamplesOnlyfinal.qza \
     --p-min-feature-count 10 \
     --p-min-sample-count 500 \
-    --o-biplot Global_samples_final_ordination.qza \
-    --o-distance-matrix Global_samples_final_distance.qza
+    --o-biplot New_C_M_6_Global__ordination.qza \
+    --o-distance-matrix New_C_M_6_Global__distance.qza
 
 qiime emperor biplot \
-    --i-biplot Global_samples_final_ordination.qza \
-    --m-sample-metadata-file Final_merged_metadata.txt \
-    --m-feature-metadata-file Global_taxonomy.qza \
-    --o-visualization Global_samples_final_biplot.qzv \
+    --i-biplot New_C_M_6_Global__ordination.qza \
+    --m-sample-metadata-file Global_merged_metadata2.txt \
+    --m-feature-metadata-file taxonomy.qza \
+    --o-visualization New_C_M_6_Global__biplot.qzv \
     --p-number-of-features 8
 
 qiime diversity beta-group-significance \
-    --i-distance-matrix Global_samples_final_distance.qza \
-    --m-metadata-file Final_merged_metadata.txt \
+    --i-distance-matrix New_C_M_6_Global__distance.qza \
+    --m-metadata-file Global_merged_metadata2.txt \
     --m-metadata-column country \
     --p-method permanova \
-    --o-visualization Global_Deicode_Country_significance.qzv
+    --o-visualization New_C_M_6_Deicode_country_significance.qzv
     
+  ##Trying for just the three non-industrial populations
     
-    
-  qiime taxa barplot \
-  --i-table Global_merged_table.qza \
-  --i-taxonomy Global_taxonomy.qza \
-  --m-metadata-file Final_merged_metadata.txt \
-  --o-visualization Trial_New_C_M_filtered_Global_samples_finalTaxaBarPlot.qzv   
-    
-    
+####Getting rid of the AGP samples 
+###RUNNING WITH SILVA
+  
+ qiime feature-table filter-samples \
+  --i-table Global_BioSamplesOnlyfinal.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --p-where '[country] IS NOT "AGP"' \
+  --o-filtered-table NON-industrial_BioSamplesOnlyfinal.qza 
 
+    qiime feature-table summarize \
+ --i-table NON-industrial_BioSamplesOnlyfinal.qza   \
+ --m-sample-metadata-file Global_merged_metadata2.txt \
+  --o-visualization NON-industrial_BioSamplesOnlyfinal.qzv
+  
+####2800 samples. 548 AGP, 97 Batwa, 16 Venezuela, Tanzania 43
+
+###core-metrics
+qiime diversity core-metrics-phylogenetic \
+  --i-phylogeny Global_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
+  --i-table NON-industrial_BioSamplesOnlyfinal.qza \
+  --p-sampling-depth 2799 \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --output-dir New_6_NON-industrial_BioSamplesOnlyfinal-phylogenetic
+  
+###alpha diversity
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity New_6_NON-industrial_BioSamplesOnlyfinal-phylogenetic/faith_pd_vector.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --o-visualization New_6_NON-industrial__faith-pd-group-significance.qzv
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity New_6_NON-industrial_BioSamplesOnlyfinal-phylogenetic/evenness_vector.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --o-visualization New_6_NON-industrial__evenness-group-significance.qzv
+  
+###Beta-group-significance
+qiime diversity beta-group-significance \
+  --i-distance-matrix New_6_NON-industrial_BioSamplesOnlyfinal-phylogenetic/unweighted_unifrac_distance_matrix.qza\
+  --m-metadata-file Global_merged_metadata2.txt \
+  --m-metadata-column country \
+  --p-pairwise \
+  --o-visualization New_6_NON-industrial__unweighted-unifrac-culture-group-significance.qzv
+
+ qiime diversity beta-group-significance \
+  --i-distance-matrix  New_6_NON-industrial_BioSamplesOnlyfinal-phylogenetic/bray_curtis_distance_matrix.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --m-metadata-column population \
+  --p-pairwise \
+  --o-visualization New_6_NON-industrial_BioSamplesOnlyfinal-phylogenetic-population-bray_curtis_distance_matrix.qzv
+
+  ##checking the taxonomy of the samples 
+  qiime taxa barplot \
+  --i-table NON-industrial_BioSamplesOnlyfinal.qza \
+  --i-taxonomy taxonomy.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --o-visualization New_C_M_6_filtered_NON-industrial_TaxaBarPlot.qzv
+  
+#ANCOM 
+
+qiime composition add-pseudocount \
+  --i-table NON-industrial_BioSamplesOnlyfinal.qza  \
+  --o-composition-table comp-NON-industrial_BioSamplesOnlyfinal.qza
+  
+qiime composition ancom \
+  --i-table comp-NON-industrial_BioSamplesOnlyfinal.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --m-metadata-column country \
+  --o-visualization comp-New_C_M_6_NON-industrial_BioSamplesOnlyfinal-ancom-country.qzv
+  
+  
+  
+  ###genuslevel for country
+qiime taxa collapse \
+  --i-table NON-industrial_BioSamplesOnlyfinal.qza  \
+  --i-taxonomy taxonomy.qza \
+  --p-level 6 \
+  --o-collapsed-table New_C_M_6_NON-industrial_BioSamplesOnlyfinal-l6.qza
+qiime composition add-pseudocount \
+  --i-table New_C_M_6_NON-industrial_BioSamplesOnlyfinal-l6.qza \
+  --o-composition-table comp-New_C_M_6_NON-industrial_BioSamplesOnlyfinal-l6.qza
+qiime composition ancom \
+  --i-table comp-New_C_M_6_NON-industrial_BioSamplesOnlyfinal-l6.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --m-metadata-column country \
+  --o-visualization New_C_M_6_NON-industrial_BioSamplesOnlyfinal-l6-ancom-country.qzv
+  
+  
+     ###ANCOM for Culture
+
+  qiime composition ancom \
+  --i-table comp-New_C_M_6_NON-industrial_BioSamplesOnlyfinal-l6.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --m-metadata-column country \
+  --o-visualization New_C_M_6_NON-industrial_BioSamplesOnlyfinal-l6-ancom-culture.qzv
+
+ 
+#####Alpha rarefaction plotting
+qiime diversity alpha-rarefaction \
+  --i-table NON-industrial_BioSamplesOnlyfinal.qza  \
+  --i-phylogeny Global_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
+  --p-max-depth 2799 \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --o-visualization New_C_M_6_NON-industrial_-alpha-rarefaction.qzv
+  
+ ###running ADONIS on the country. Determine whether groups of samples are significantly different from one
+  another using the ADONIS
+   
+ qiime diversity adonis \
+  --i-distance-matrix  New_6_NON-industrial_BioSamplesOnlyfinal-phylogenetic/bray_curtis_distance_matrix.qza \
+  --m-metadata-file Global_merged_metadata2.txt \
+  --p-formula "country" \
+  --o-visualization 6_filtered_country-adonis.qzv
+  
+  
+  
+  ######running DEICODE/ Aitchison Distance ---"Denoising and Quality Control of High-dimensional Microbiome Data."
+ qiime deicode rpca \
+    --i-table NON-industrial_BioSamplesOnlyfinal.qza \
+    --p-min-feature-count 10 \
+    --p-min-sample-count 500 \
+    --o-biplot New_C_M_6_NON-industrial__ordination.qza \
+    --o-distance-matrix New_C_M_6_NON-industrial__distance.qza
+
+qiime emperor biplot \
+    --i-biplot New_C_M_6_NON-industrial__ordination.qza \
+    --m-sample-metadata-file Global_merged_metadata2.txt \
+    --m-feature-metadata-file taxonomy.qza \
+    --o-visualization New_C_M_6_NON-industrial__biplot.qzv \
+    --p-number-of-features 8
+
+qiime diversity beta-group-significance \
+    --i-distance-matrix New_C_M_6_NON-industrial__distance.qza \
+    --m-metadata-file Global_merged_metadata2.txt \
+    --m-metadata-column country \
+    --p-method permanova \
+    --o-visualization NON-industrial_New_C_M_6_Deicode_country_significance.qzv

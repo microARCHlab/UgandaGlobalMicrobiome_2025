@@ -1,0 +1,251 @@
+###Decided on a .60 threshold 
+##FOLDER IS NAMED POSTDECONTAMFINAL
+####Getting rid of the weird individuals 11492.A19450.TW51 and 11492.A19489.TW99 because they had a large proportion of contaminant
+  
+##converting my post decontam file to a Biomfile
+
+biom convert -i SPECIES-decontam-90-11SEPT23.60.txt -o New_Batwa_6.biom --table-type="OTU table" --to-hdf5
+
+##Converting to qza
+qiime tools import \
+  --input-path New_Batwa_6.biom \
+  --type 'FeatureTable[Frequency]' \
+  --input-format BIOMV210Format \
+  --output-path New_Batwa_6_table.qza
+  
+##visualizing the feature table post decontam
+qiime feature-table summarize \
+  --i-table New_Batwa_6_table.qza \
+  --o-visualization New_Batwa.biom_table_6.qzv \
+  --m-sample-metadata-file Batwa_metadata2.txt
+
+##Filtering out controls (EBC1)
+qiime feature-table filter-samples \
+  --i-table New_Batwa_6_table.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --p-where '[SampleType] IS NOT "EBC1"' \
+  --o-filtered-table New_6_BatwaBioSamplesOnly.qza    
+
+##Filtering out controls (EBC2)
+qiime feature-table filter-samples \
+  --i-table New_6_BatwaBioSamplesOnly.qza   \
+  --m-metadata-file Batwa_metadata2.txt \
+  --p-where '[SampleType] IS NOT "EBC2"' \
+  --o-filtered-table New_6_BatwaBioSamplesOnlyfinal.qza  
+
+
+##Filtering out PCR
+qiime feature-table filter-samples \
+  --i-table New_6_BatwaBioSamplesOnlyfinal.qza    \
+  --m-metadata-file Batwa_metadata2.txt \
+  --p-where '[SampleType] IS NOT "PCR"' \
+  --o-filtered-table New_6_no_PCR_BatwaBioSamplesOnlyfinal.qza   
+  
+ ###filtering out individual 11492.A19489.TW99 who had 1071 feature counts was full of contaminants 
+ 
+ qiime feature-table filter-samples \
+  --i-table New_6_no_PCR_BatwaBioSamplesOnlyfinal.qza   \
+  --m-metadata-file Batwa_metadata2.txt \
+  --p-where '[sample_name] IS NOT "11492.A19489.TW99"' \
+  --o-filtered-table New_6_no_PCR_NoTW99_BatwaBioSamplesOnlyfinal.qza    
+  
+  
+  ###Filtering out the duplicate sample 11492.A19451.KG59e
+
+ qiime feature-table filter-samples \
+  --i-table New_6_no_PCR_NoTW99_BatwaBioSamplesOnlyfinal.qza   \
+  --m-metadata-file Batwa_metadata2.txt \
+  --p-where '[sample_name] IS NOT "11492.A19451.KG59e"' \
+  --o-filtered-table No_duplicate_BatwaBioSamplesOnlyfinal.qza
+  
+ qiime feature-table filter-samples \
+  --i-table No_duplicate_BatwaBioSamplesOnlyfinal.qza   \
+  --m-metadata-file Batwa_metadata2.txt \
+  --p-where '[sample_name] IS NOT "11492.A19450.TW51"' \
+  --o-filtered-table New_6_no_PCR_NoTW99_NOTW51__BatwaBioSamplesOnlyfinal.qza   
+  
+  ###Filtering out chloroplast and mitochrondia
+  qiime taxa filter-table \
+  --i-table New_6_no_PCR_NoTW99_NOTW51__BatwaBioSamplesOnlyfinal.qza\
+  --i-taxonomy taxonomy.qza \
+  --p-exclude mitochondria,chloroplast \
+  --o-filtered-table New_C_M_6_BatwaBioSamplesOnlyfinal.qza
+  
+    qiime feature-table summarize \
+  --i-table New_C_M_6_BatwaBioSamplesOnlyfinal.qza \
+ --m-sample-metadata-file Batwa_metadata2.txt \
+  --o-visualization New_C_M_6_BatwaBioSamplesOnlyfinal.qzv
+
+  #########Filtering out features that have a frequency less than 5
+qiime feature-table filter-features \
+  --i-table New_C_M_6_BatwaBioSamplesOnlyfinal.qza \
+  --p-min-frequency 5 \
+  --o-filtered-table table_five_freq.qza
+
+qiime feature-table summarize \
+  --i-table table_five_freq.qza \
+    --m-sample-metadata-file Batwa_metadata2.txt \
+  --o-visualization table_five_freq_summary.qzv
+
+
+###core-metrics
+qiime diversity core-metrics-phylogenetic \
+  --i-phylogeny Batwa_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
+  --i-table table_five_freq.qza \
+  --p-sampling-depth 4699 \
+  --m-metadata-file Batwa_metadata2.txt \
+  --output-dir New_6_BatwaBioSamplesOnlyfinal-phylogenetic
+  
+###alpha diversity
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity New_6_BatwaBioSamplesOnlyfinal-phylogenetic/faith_pd_vector.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --o-visualization New_6_Batwa_faith-pd-group-significance.qzv
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity New_6_BatwaBioSamplesOnlyfinal-phylogenetic/evenness_vector.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --o-visualization New_6_Batwa_evenness-group-significance.qzv
+  
+###Beta-group-significance
+qiime diversity beta-group-significance \
+  --i-distance-matrix New_6_BatwaBioSamplesOnlyfinal-phylogenetic/unweighted_unifrac_distance_matrix.qza\
+  --m-metadata-file Batwa_metadata2.txt \
+  --m-metadata-column culture \
+  --p-pairwise \
+  --o-visualization New_6_Batwa_unweighted-unifrac-culture-group-significance.qzv
+  
+qiime diversity beta-group-significance \
+  --i-distance-matrix  New_6_BatwaBioSamplesOnlyfinal-phylogenetic/unweighted_unifrac_distance_matrix.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --m-metadata-column population \
+  --p-pairwise \
+  --o-visualization New_6_Batwa_unweighted-unifrac-population-group-significance.qzv
+  
+  qiime diversity beta-group-significance \
+  --i-distance-matrix  New_6_BatwaBioSamplesOnlyfinal-phylogenetic/unweighted_unifrac_distance_matrix.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --m-metadata-column collectionsite \
+  --p-pairwise \
+  --o-visualization New_6_Batwa_unweighted-unifrac-collectionsite-group-significance.qzv
+  
+  
+ qiime diversity beta-group-significance \
+  --i-distance-matrix  New_6_BatwaBioSamplesOnlyfinal-phylogenetic/bray_curtis_distance_matrix.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --m-metadata-column population \
+  --p-pairwise \
+  --o-visualization New_6_BatwaBioSamplesOnlyfinal-phylogenetic-population-bray_curtis_distance_matrix.qzv
+
+  ##checking the taxonomy of the samples 
+  qiime taxa barplot \
+  --i-table table_five_freq.qza \
+  --i-taxonomy taxonomy.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --o-visualization New_C_M_6_filtered_BatwaTaxaBarPlot.qzv
+  
+#ANCOM 
+
+qiime composition add-pseudocount \
+  --i-table table_five_freq.qza  \
+  --o-composition-table comp-New_C_M_6_BatwaBioSamplesOnlyfinal.qza
+  
+qiime composition ancom \
+  --i-table comp-New_C_M_6_BatwaBioSamplesOnlyfinal.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --m-metadata-column population \
+  --o-visualization comp-New_C_M_6_BatwaBioSamplesOnlyfinal-ancom-population.qzv
+  
+qiime composition ancom \
+  --i-table comp-New_C_M_6_BatwaBioSamplesOnlyfinal.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --m-metadata-column collectionsite \
+  --o-visualization comp-New_C_M_6_BatwaBioSamplesOnlyfinal-ancom-collectionsite.qzv
+  
+  
+  ###genuslevel for population
+qiime taxa collapse \
+  --i-table table_five_freq.qza  \
+  --i-taxonomy taxonomy.qza \
+  --p-level 6 \
+  --o-collapsed-table New_C_M_6_BatwaBioSamplesOnlyfinal-l6.qza
+qiime composition add-pseudocount \
+  --i-table New_C_M_6_BatwaBioSamplesOnlyfinal-l6.qza \
+  --o-composition-table comp-New_C_M_6_BatwaBioSamplesOnlyfinal-l6.qza
+qiime composition ancom \
+  --i-table comp-New_C_M_6_BatwaBioSamplesOnlyfinal-l6.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --m-metadata-column population \
+  --o-visualization New_C_M_6_BatwaBioSamplesOnlyfinal-l6-ancom-population.qzv
+  
+   ###ANCOM for collection site
+
+qiime composition ancom \
+  --i-table comp-New_C_M_6_BatwaBioSamplesOnlyfinal-l6.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --m-metadata-column collectionsite \
+  --o-visualization New_C_M_6_BatwaBioSamplesOnlyfinal-l6-ancom-collectionsite.qzv
+
+  
+     ###ANCOM for Culture
+
+  qiime composition ancom \
+  --i-table comp-New_C_M_6_BatwaBioSamplesOnlyfinal-l6.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --m-metadata-column culture \
+  --o-visualization New_C_M_6_BatwaBioSamplesOnlyfinal-l6-ancom-culture.qzv
+
+ 
+#####Alpha rarefaction plotting
+qiime diversity alpha-rarefaction \
+  --i-table table_five_freq.qza  \
+  --i-phylogeny Batwa_phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
+  --p-max-depth 4699 \
+  --m-metadata-file Batwa_metadata2.txt \
+  --o-visualization New_C_M_6_Batwa-alpha-rarefaction.qzv
+  
+ ###running ADONIS on the collection site. Determine whether groups of samples are significantly different from one
+  another using the ADONIS
+   
+ qiime diversity adonis \
+  --i-distance-matrix New_C_M_6_bray_curtis_distance_matrix.qza \
+  --m-metadata-file Batwa_metadata2.txt \
+  --p-formula "collectionsite" \
+  --o-visualization 6_filtered_collectionsite-adonis.qzv
+  
+  
+  
+  ######running DEICODE/ Aitchison Distance ---"Denoising and Quality Control of High-dimensional Microbiome Data."
+ qiime deicode rpca \
+    --i-table table_five_freq.qza \
+    --p-min-feature-count 10 \
+    --p-min-sample-count 500 \
+    --o-biplot New_C_M_6_Batwa_ordination.qza \
+    --o-distance-matrix New_C_M_6_Batwa_distance.qza
+
+qiime emperor biplot \
+    --i-biplot New_C_M_6_Batwa_ordination.qza \
+    --m-sample-metadata-file Batwa_metadata2.txt \
+    --m-feature-metadata-file taxonomy.qza \
+    --o-visualization New_C_M_6_Batwa_biplot.qzv \
+    --p-number-of-features 8
+
+qiime diversity beta-group-significance \
+    --i-distance-matrix New_C_M_6_Batwa_distance.qza \
+    --m-metadata-file Batwa_metadata2.txt \
+    --m-metadata-column population \
+    --p-method permanova \
+    --o-visualization New_C_M_6_Deicode_Population_significance.qzv
+    
+qiime diversity beta-group-significance \
+    --i-distance-matrix New_C_M_6_Batwa_distance.qza \
+    --m-metadata-file Batwa_metadata2.txt \
+    --m-metadata-column collectionsite \
+    --p-method permanova \
+    --o-visualization New_C_M_Deicode_collectionsite_significance.qzv
+    
+    qiime diversity beta-group-significance \
+    --i-distance-matrix New_C_M_6_Batwa_distance.qza \
+    --m-metadata-file Batwa_metadata2.txt \
+    --m-metadata-column culture \
+    --p-method permanova \
+    --o-visualization New_C_M_6_Deicode_culture_significance.qzv

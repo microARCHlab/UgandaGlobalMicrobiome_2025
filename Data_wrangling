@@ -3,7 +3,7 @@
 #Data downloaded from ENA https://www.ebi.ac.uk/ena/browser/view/PRJEB7825
 
 ###importing raw data into qiime2 using the qiime2 moving pictures EMP protocol” multiplexed paired-end fastq
-##Color used - AGP-dd1c77 Tanzania-e0f3db Uganda-8856a7 Venezuela-014636
+##Color used for plots - AGP-dd1c77 Tanzania-e0f3db Uganda-8856a7 Venezuela-014636
 ##importing into qza format
   qiime tools import \
  --type EMPPairedEndSequences \
@@ -132,8 +132,6 @@ mv table_five_freq.qza Yanomami_final.qza
 
 
 
-
-
 ##########################################################################################
 ##Tanzania data wrangling.
 #Data downloaded from ENA- https://www.ebi.ac.uk/ena/browser/view/PRJEB14941
@@ -227,10 +225,6 @@ qiime feature-table summarize \
 qiime feature-table tabulate-seqs \
   --i-data Tanzania_rep-seqs-deblur.qza \
   --o-visualization Tanzania_rep-seqs.qzv
-
-
-
-
 
 ####NOVEMBER TWO,2023####
 #see Tanzania_raw_file_download.sh script which was gotten from ENA##
@@ -585,3 +579,244 @@ qiime feature-table summarize \
   --i-table table_five_freq.qza \
     --m-sample-metadata-file Batwa_metadata2.txt \
   --o-visualization table_five_freq_summary.qzv
+
+
+
+#!bin/bash
+###### American Gut Project Data Wrangling - Oral Microbiome ######
+# Programs and Versions
+# Qiime2 v.2022.8
+
+## User notes: Daniel McDonald updated the ftp site (http://ftp.microbio.me/AmericanGut/01jul2024-demultiplexed-data/) for the compressed QIIME sequence data artifacts (.qza) files download. In addition to the first 97 qza files shared from the previous ftp site, there are 14 more files bringing it to 112 qza files in total. Aside from the newly added qza files to the updated ftplink, the previous 97 qza files had tsv files that correspond to the run data (including sampleID, sampletype, and qiita prepID) instead of downloading all of the qza files, I checked which of the study prep files contained oral samples by greping a list of sampleID that's listed as oral samples. I then created a list of qza files contianing oral samples (curated from the metadata from Iyun) and download the data using the list as a variable via wget.
+
+# Download qza files with list of compressed QIIME sequence data 
+cat Oral_QZA.txt | while read sample; 
+do
+wget http://ftp.microbio.me/AmericanGut/01jul2024-demultiplexed-data/$sample
+;done
+
+# The compressed QIIME sequence data contains demultiplexed sequences already. Out of 112 available prep/qiita studies, 72 QZA files were retained with a hit for oral samples. Moved forward to filtering the sequences based on quality (the PrepNames.txt file is the same as Oral_QZA.txt, just had the extension .qza removed): 
+cat PrepNames.txt | while read sample; 
+do 
+qiime quality-filter q-score \
+    --i-demux $sample.qza \
+    --o-filtered-sequences $sample-filtered.qza \
+    --o-filter-stats $sample-filter-stats.qza;
+done
+
+# Have to assess if the sequences all contain 150 nt. Prep files that falls below 150 nt are exclude as oral samples from those are also below 150 nts. To do this, have to visualize the demux results by viewing the qzv files on Qiime2 View via Chrome browser:
+cat PrepNames.txt | while read sample; 
+do 
+qiime demux summarize \
+    --i-data $sample-filtered.qza\
+    --o-visualization $sample-filteredqual.qzv;
+done
+
+# Once Prep files are filtered based on quality and length, moved forward with deblur to create denoised feature tables
+cat PrepNames.txt | while read sample; 
+do 
+qiime deblur denoise-16S \
+ --i-demultiplexed-seqs $sample-filtered.qza\
+ --p-trim-length 150\
+ --o-representative-sequences rep-seqs-deblur_$sample.qza\
+ --o-table table-deblur_$sample.qza\
+ --p-sample-stats \
+ --o-stats deblur-stats_$sample.qza;
+done
+
+#sanity check-- check post deblur tables, I ran this in another Jupyter Noteboook window as taxonomy is still running 
+%cat PrepNames.txt | while read sample; 
+do
+qiime feature-table summarize \
+ --i-table table-deblur_$sample.qza\
+ --o-visualization table-deblur_$sample.qzv;
+done
+
+# merge repseq files for taxonomy classifier trainer
+qiime feature-table merge-seqs \
+--i-data rep-seqs-deblur_1117-AGP3_081213_16S_NoIndex.qza \
+--i-data rep-seqs-deblur_1119-AGP7_16S_NoIndex.qza \
+--i-data rep-seqs-deblur_1120-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_1121-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_1122-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_1123-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_1124-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_1125-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_1130-AGP4_92513_16S_Noindex.qza \
+--i-data rep-seqs-deblur_1132-plate_57.qza \
+--i-data rep-seqs-deblur_1132-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_1133-AGP5_103013_NoIndex_L001.qza \
+--i-data rep-seqs-deblur_1144-Pool_S1_L001.qza \
+--i-data rep-seqs-deblur_1158-AG18_S1_L001.qza \
+--i-data rep-seqs-deblur_1164-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_1168-AG_21_Lane1_S1_L001.qza \
+--i-data rep-seqs-deblur_1352-Fermentation_Festival_S1_L001.qza \
+--i-data rep-seqs-deblur_1430-AG25_S1_L001.qza \
+--i-data rep-seqs-deblur_1695-AG_AGA_S1_L001.qza \
+--i-data rep-seqs-deblur_1834-AG_27_S1_L001.qza \
+--i-data rep-seqs-deblur_1894-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_2060-Metcalf_TE2_May_9-10_S1.qza \
+--i-data rep-seqs-deblur_2118-Paulus_AG30_S1_L001.qza \
+--i-data rep-seqs-deblur_2201-AG_31_S1_L001.qza \
+--i-data rep-seqs-deblur_2252-AG_31_S1_L001.qza \
+--i-data rep-seqs-deblur_2253-AG32_S1_L001.qza \
+--i-data rep-seqs-deblur_2362-RQ_3D_Mouse_2.qza \
+--i-data rep-seqs-deblur_2363-Pace_GI_S1.qza \
+--i-data rep-seqs-deblur_2422-AG_33_S1_L001.qza \
+--i-data rep-seqs-deblur_2423-AGOffice1_S0_L001.qza \
+--i-data rep-seqs-deblur_2424-AGOffice2_S0_L001.qza \
+--i-data rep-seqs-deblur_2599-AG_34.qza \
+--i-data rep-seqs-deblur_2603-AG35_Rima_S1_L001.qza \
+--i-data rep-seqs-deblur_2985-AG_36_S1_L001.qza \
+--i-data rep-seqs-deblur_2986-Cliff_Surfer_S1_L001.qza \
+--i-data rep-seqs-deblur_2990-Embriette_Fermentation_S1_L001.qza \
+--i-data rep-seqs-deblur_3176-AGP_37_S1_L001.qza \
+--i-data rep-seqs-deblur_3633-AGP_39_S1_L001.qza \
+--i-data rep-seqs-deblur_4072-AGP_197_202_203_S1_L001.qza \
+--i-data rep-seqs-deblur_4116-AG_43_S1_L001.qza \
+--i-data rep-seqs-deblur_4175-AGP_40_S1_L001.qza \
+--i-data rep-seqs-deblur_4426-American_Gut_Project_207-211.qza \
+--i-data rep-seqs-deblur_4445-Undetermined_S0_L001.qza \
+--i-data rep-seqs-deblur_4537-American_Gut_project_212_213_215_216_Mayfield_Algae_1_2_S1_L001.qza \
+--i-data rep-seqs-deblur_4642-AGP_214_221_222_Patient_Bat_1_S1_L001.qza \
+--i-data rep-seqs-deblur_4758-SeJin_Fermentation_1-3_AGP_183_196_198_S1_L001.qza \
+--i-data rep-seqs-deblur_4761-Guelph_1_Tsunoda_1-2_AGP_223-225_S1_L001.qza \
+--i-data rep-seqs-deblur_5002-American_Gut_Project_229_231-235_S1_L001.qza \
+--i-data rep-seqs-deblur_5442-RERUN_AGP_244_Phage_Study_1-3_S1_L001.qza \
+--i-data rep-seqs-deblur_5726-AGP_246-251_S1_L001.qza \
+--i-data rep-seqs-deblur_6346-SeJin_Fermentation_1-3_AGP_183_196_198_S1_L001.qza \
+--i-data rep-seqs-deblur_6683-HNRC_HIV_4_AGP_262-263_S1_L001.qza \
+--i-data rep-seqs-deblur_7096-RERUN_RADY_Studies_Spring_2019_Plate_8_12_15_Tonsilitis_1_AGP_253_S1_L001.qza \
+--i-data rep-seqs-deblur_7410-AGP_270-274_LS_prev_Unsequenced_Jul19_1_S1_L001.qza \
+--i-data rep-seqs-deblur_7901-American_Gut_Project_276-279_S1_L001.qza \
+--i-data rep-seqs-deblur_8581-American_Gut_Project_281_283_284.qza \
+--i-data rep-seqs-deblur_9715-AGP_266_SeaSCAPE_2019_1-5_S1_L001.qza \
+--i-data rep-seqs-deblur_10542-THDMI_US_1-5_S1_L001.qza \
+--i-data rep-seqs-deblur_10765-Metagenics_Project_B_1-3_S1_L001.qza \
+--i-data rep-seqs-deblur_11064-THDMI_US_6_THDMI_UK_2-4_S1_L001.qza \
+--i-data rep-seqs-deblur_11156-Costa_Rica_Nicoya_1-2_Stein_Schizophrenia_April2021_1_Air_Sampling_Household_1-2_w_MetagenicsB_S1_L001.qza \
+--i-data rep-seqs-deblur_11203-THDMI_US_UK_reruns_Jul2021_THDMI_UK_1_5_S1_L001.qza \
+--i-data rep-seqs-deblur_11240-TMI_AGP_300_302_304_308_310_S1_L001.qza \
+--i-data rep-seqs-deblur_11242-TMI_AGP_291-294_295_297_S1_L001.qza \
+--i-data rep-seqs-deblur_11255-TMI_AGP_296_298_BEAM_U19_1-2_NCRAD_1-2_S1_L001.qza \
+--i-data rep-seqs-deblur_12290-Zarrinpar_MultiProjects_Sept21_Plates_5-9_American_Gut_Project_312_rerun_S1_L001.qza \
+--i-data rep-seqs-deblur_12291-Rerun1_TMI_AGP_299_301_303_307_309_311_S1_L001.qza \
+--i-data rep-seqs-deblur_12637-Krupp_Endometroisis_Plates1-3_THDMI_Rerun_S1_L001.qza \
+--i-data rep-seqs-deblur_12975-THDMI_MX_Plates_rerun_1-2_AGP_314_S1_L001.qza \
+--i-data rep-seqs-deblur_13019-THDMI_MX_Plates_rerun_3-6_S1_L001.qza \
+--i-data rep-seqs-deblur_13519-Navy_ONR_May2022_Plate_1_S1_L001.qza \
+--i-data rep-seqs-deblur_13742-AGP_plates_316_317_THDMI_MX_reseq.qza \
+--i-data rep-seqs-deblur_16230-231204_M05314_0388_000000000-L9DMF_SMPL1_S1_L001.qza \
+--o-merged-data AGP_deblur150-merge_rep-seqs_jul2024.qza\
+
+# Merged all the post-deblur feature tables together, overlapped any samples that are incorporated in multiple prep qza files using the 'sum' parameter 
+qiime feature-table merge \
+--p-overlap-method 'sum'\
+--i-tables table-deblur_1117-AGP3_081213_16S_NoIndex.qza \
+--i-tables table-deblur_1119-AGP7_16S_NoIndex.qza \
+--i-tables table-deblur_1120-Undetermined_S0_L001.qza \
+--i-tables table-deblur_1121-Undetermined_S0_L001.qza \
+--i-tables table-deblur_1122-Undetermined_S0_L001.qza \
+--i-tables table-deblur_1123-Undetermined_S0_L001.qza \
+--i-tables table-deblur_1124-Undetermined_S0_L001.qza \
+--i-tables table-deblur_1125-Undetermined_S0_L001.qza \
+--i-tables table-deblur_1130-AGP4_92513_16S_Noindex.qza \
+--i-tables table-deblur_1132-plate_57.qza \
+--i-tables table-deblur_1132-Undetermined_S0_L001.qza \
+--i-tables table-deblur_1133-AGP5_103013_NoIndex_L001.qza \
+--i-tables table-deblur_1144-Pool_S1_L001.qza \
+--i-tables table-deblur_1158-AG18_S1_L001.qza \
+--i-tables table-deblur_1164-Undetermined_S0_L001.qza \
+--i-tables table-deblur_1168-AG_21_Lane1_S1_L001.qza \
+--i-tables table-deblur_1352-Fermentation_Festival_S1_L001.qza \
+--i-tables table-deblur_1430-AG25_S1_L001.qza \
+--i-tables table-deblur_1695-AG_AGA_S1_L001.qza \
+--i-tables table-deblur_1834-AG_27_S1_L001.qza \
+--i-tables table-deblur_1894-Undetermined_S0_L001.qza \
+--i-tables table-deblur_2060-Metcalf_TE2_May_9-10_S1.qza \
+--i-tables table-deblur_2118-Paulus_AG30_S1_L001.qza \
+--i-tables table-deblur_2201-AG_31_S1_L001.qza \
+--i-tables table-deblur_2252-AG_31_S1_L001.qza \
+--i-tables table-deblur_2253-AG32_S1_L001.qza \
+--i-tables table-deblur_2362-RQ_3D_Mouse_2.qza \
+--i-tables table-deblur_2363-Pace_GI_S1.qza \
+--i-tables table-deblur_2422-AG_33_S1_L001.qza \
+--i-tables table-deblur_2423-AGOffice1_S0_L001.qza \
+--i-tables table-deblur_2424-AGOffice2_S0_L001.qza \
+--i-tables table-deblur_2599-AG_34.qza \
+--i-tables table-deblur_2603-AG35_Rima_S1_L001.qza \
+--i-tables table-deblur_2985-AG_36_S1_L001.qza \
+--i-tables table-deblur_2986-Cliff_Surfer_S1_L001.qza \
+--i-tables table-deblur_2990-Embriette_Fermentation_S1_L001.qza \
+--i-tables table-deblur_3176-AGP_37_S1_L001.qza \
+--i-tables table-deblur_3633-AGP_39_S1_L001.qza \
+--i-tables table-deblur_4072-AGP_197_202_203_S1_L001.qza \
+--i-tables table-deblur_4116-AG_43_S1_L001.qza \
+--i-tables table-deblur_4175-AGP_40_S1_L001.qza \
+--i-tables table-deblur_4426-American_Gut_Project_207-211.qza \
+--i-tables table-deblur_4445-Undetermined_S0_L001.qza \
+--i-tables table-deblur_4537-American_Gut_project_212_213_215_216_Mayfield_Algae_1_2_S1_L001.qza \
+--i-tables table-deblur_4642-AGP_214_221_222_Patient_Bat_1_S1_L001.qza \
+--i-tables table-deblur_4758-SeJin_Fermentation_1-3_AGP_183_196_198_S1_L001.qza \
+--i-tables table-deblur_4761-Guelph_1_Tsunoda_1-2_AGP_223-225_S1_L001.qza \
+--i-tables table-deblur_5002-American_Gut_Project_229_231-235_S1_L001.qza \
+--i-tables table-deblur_5442-RERUN_AGP_244_Phage_Study_1-3_S1_L001.qza \
+--i-tables table-deblur_5726-AGP_246-251_S1_L001.qza \
+--i-tables table-deblur_6346-SeJin_Fermentation_1-3_AGP_183_196_198_S1_L001.qza \
+--i-tables table-deblur_6683-HNRC_HIV_4_AGP_262-263_S1_L001.qza \
+--i-tables table-deblur_7096-RERUN_RADY_Studies_Spring_2019_Plate_8_12_15_Tonsilitis_1_AGP_253_S1_L001.qza \
+--i-tables table-deblur_7410-AGP_270-274_LS_prev_Unsequenced_Jul19_1_S1_L001.qza \
+--i-tables table-deblur_7901-American_Gut_Project_276-279_S1_L001.qza \
+--i-tables table-deblur_8581-American_Gut_Project_281_283_284.qza \
+--i-tables table-deblur_9715-AGP_266_SeaSCAPE_2019_1-5_S1_L001.qza \
+--i-tables table-deblur_10542-THDMI_US_1-5_S1_L001.qza \
+--i-tables table-deblur_10765-Metagenics_Project_B_1-3_S1_L001.qza \
+--i-tables table-deblur_11064-THDMI_US_6_THDMI_UK_2-4_S1_L001.qza \
+--i-tables table-deblur_11156-Costa_Rica_Nicoya_1-2_Stein_Schizophrenia_April2021_1_Air_Sampling_Household_1-2_w_MetagenicsB_S1_L001.qza \
+--i-tables table-deblur_11203-THDMI_US_UK_reruns_Jul2021_THDMI_UK_1_5_S1_L001.qza \
+--i-tables table-deblur_11240-TMI_AGP_300_302_304_308_310_S1_L001.qza \
+--i-tables table-deblur_11242-TMI_AGP_291-294_295_297_S1_L001.qza \
+--i-tables table-deblur_11255-TMI_AGP_296_298_BEAM_U19_1-2_NCRAD_1-2_S1_L001.qza \
+--i-tables table-deblur_12290-Zarrinpar_MultiProjects_Sept21_Plates_5-9_American_Gut_Project_312_rerun_S1_L001.qza \
+--i-tables table-deblur_12291-Rerun1_TMI_AGP_299_301_303_307_309_311_S1_L001.qza \
+--i-tables table-deblur_12637-Krupp_Endometroisis_Plates1-3_THDMI_Rerun_S1_L001.qza \
+--i-tables table-deblur_12975-THDMI_MX_Plates_rerun_1-2_AGP_314_S1_L001.qza \
+--i-tables table-deblur_13019-THDMI_MX_Plates_rerun_3-6_S1_L001.qza \
+--i-tables table-deblur_13519-Navy_ONR_May2022_Plate_1_S1_L001.qza \
+--i-tables table-deblur_13742-AGP_plates_316_317_THDMI_MX_reseq.qza \
+--i-tables table-deblur_16230-231204_M05314_0388_000000000-L9DMF_SMPL1_S1_L001.qza \
+--o-merged-table AGP_deblur150-merge_table_jul2024.qza\
+
+# Check the merge table 
+qiime feature-table summarize\
+--i-table AGP_deblur150-merge_table_jul2024.qza\
+--o-visualization AGP_deblur150-merge_table_jul2024.qzv\
+
+
+# Filtering to only keep non duplicated hostID ORAL samples (Oral_and_blanks.txt are cleaned up sample IDs from Iyun's metadata table)
+qiime feature-table filter-samples \
+--i-table AGP_deblur150-merge_table_jul2024.qza \
+--m-metadata-file Oral_and_blanks.txt\
+--o-filtered-table AGP_deblur150_merged31Jul2024_filtered_Oral_and_BLANKS_07Aug2024.qza\
+
+#Sanity check- check to make sure only Oral and blanks are kept
+qiime feature-table summarize \
+--i-table AGP_deblur150_merged31Jul2024_filtered_Oral_and_BLANKS_07Aug2024.qza \
+--o-visualization AGP_deblur150_merged31Jul2024_filtered_Oral_and_BLANKS_07Aug2024.qzv\
+
+# Filtered out any samples ID that have less than 1000 Seqs counts of biosamples (Less1000SeqsCts_BIOSAMPLES.txt is created after looking through the demux summary visualization files for specific sample IDs that have less than 1000 seqs)
+qiime feature-table filter-samples \
+--i-table AGP_deblur150_merged31Jul2024_filtered_Oral_and_BLANKS_07Aug2024.qza \
+--m-metadata-file Lessthan1000sqcts_BIOSAMPLEONLY.txt\
+--p-exclude-ids \
+--o-filtered-table AGP_deblur150_merged31Jul2024_filtered_Oral_and_BLANKS_lessthan1000sqcts_09Aug2024.qza \
+
+# Sanity Check
+qiime feature-table summarize \
+--i-table AGP_deblur150_merged31Jul2024_filtered_Oral_and_BLANKS_lessthan1000sqcts_09Aug2024.qza \
+--o-visualization AGP_deblur150_merged31Jul2024_filtered_Oral_and_BLANKS_lessthan1000sqcts_09Aug2024.qzv \
+
+#Export qiime artifact to share
+qiime tools export\
+--input-path AGP_deblur150_merged31Jul2024_filtered_Oral_and_BLANKS_lessthan1000sqcts_09Aug2024.qza\
+--output-path Correct_Filtered_HostDuplicate_Table_lessthan1000seqct_plusBLANKS_09Aug2024_MOSTUPDATED

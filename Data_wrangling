@@ -1,11 +1,7 @@
-# Yanomami and Tanzania Microbiome Data Analysis Script
+# Venezuela, AGP, Uganda, and Tanzania Microbiome Data Analysis Script
 # This script uses QIIME 2 (version 2022.8) for analyzing microbiome datasets.
 # It includes steps for importing, demultiplexing, quality control, feature table generation, filtering, and phylogenetic tree creation.
 # Color codes for plots are specified as follows:
-#   - AGP: #dd1c77
-#   - Tanzania: #e0f3db
-#   - Uganda: #8856a7
-#   - Venezuela: #014636
 
 ########################################
 # YANOMAMI DATA WRANGLING

@@ -1,37 +1,46 @@
-##All analyses ran in qiime 2022.8
-###YANOMAMI DATA WRANGLING
-#Data downloaded from ENA https://www.ebi.ac.uk/ena/browser/view/PRJEB7825
+# Yanomami and Tanzania Microbiome Data Analysis Script
+# This script uses QIIME 2 (version 2022.8) for analyzing microbiome datasets.
+# It includes steps for importing, demultiplexing, quality control, feature table generation, filtering, and phylogenetic tree creation.
+# Color codes for plots are specified as follows:
+#   - AGP: #dd1c77
+#   - Tanzania: #e0f3db
+#   - Uganda: #8856a7
+#   - Venezuela: #014636
 
-###importing raw data into qiime2 using the qiime2 moving pictures EMP protocol” multiplexed paired-end fastq
-##Color used for plots - AGP-dd1c77 Tanzania-e0f3db Uganda-8856a7 Venezuela-014636
-##importing into qza format
-  qiime tools import \
- --type EMPPairedEndSequences \
- --input-path Yanomami-paired-end-sequences \
+########################################
+# YANOMAMI DATA WRANGLING
+########################################
+
+# Data downloaded from ENA: https://www.ebi.ac.uk/ena/browser/view/PRJEB7825
+
+### Step 1: Import raw data ###
+qiime tools import \
+  --type EMPPairedEndSequences \
+  --input-path Yanomami-paired-end-sequences \
   --output-path Yanomami-paired-end-sequences.qza
-  
-##Demultiplexing
+
+### Step 2: Demultiplexing ###
 qiime demux emp-paired \
   --i-seqs Yanomami-paired-end-sequences.qza \
-  --m-barcodes-file Yanomani_metadata.txt\
+  --m-barcodes-file Yanomani_metadata.txt \
   --m-barcodes-column barcode \
   --p-rev-comp-barcodes False \
- --p-rev-comp-mapping-barcodes True \
+  --p-rev-comp-mapping-barcodes True \
   --o-per-sample-sequences Yanomani.qza \
   --o-error-correction-details Yanomani-details.qza
 
-##Visualizing 
+# Visualize demultiplexing summary
 qiime demux summarize \
   --i-data Yanomani.qza \
   --o-visualization Yanomani.qzv
-  
-###Sequence quality control and feature table generation.
+
+### Step 3: Quality filtering ###
 qiime quality-filter q-score \
   --i-demux Yanomani.qza \
   --o-filtered-sequences Yanomani-filtered.qza \
   --o-filter-stats Yanomani-filter-stats.qza
 
-###Deblur
+### Step 4: Deblur denoising ###
 qiime deblur denoise-16S \
   --i-demultiplexed-seqs Yanomani-filtered.qza \
   --p-trim-length 150 \
@@ -39,168 +48,97 @@ qiime deblur denoise-16S \
   --o-representative-sequences Yanomami_rep-seqs-deblur.qza \
   --o-table Yanomani_table-deblur.qza \
   --o-stats Yanomani_deblur-stats.qza
-  
-##visualizing the deblur stats 
- qiime metadata tabulate \
+
+# Visualize deblur stats
+qiime metadata tabulate \
   --m-input-file Yanomani-filter-stats.qza \
   --o-visualization Yanomani_demux-filter-stats.qzv
 qiime deblur visualize-stats \
   --i-deblur-stats Yanomani_deblur-stats.qza \
   --o-visualization Yanomani_deblur-stats.qzv
 
+# Rename for consistency
 mv Yanomani_rep-seqs-deblur.qza Yanomani_rep-seqs.qza
 mv Yanomani_table-deblur.qza Yanomani_table.qza
 
-###creating the feature table
+### Step 5: Generate feature table ###
 qiime feature-table summarize \
   --i-table Yanomani_table.qza \
   --o-visualization Yanomani_table.qzv \
   --m-sample-metadata-file Yanomani_metadata.txt
+
 qiime feature-table tabulate-seqs \
   --i-data Yanomani_rep-seqs.qza \
   --o-visualization Yanomani_rep-seqs.qzv
 
-###creating a phylogentic tree
+### Step 6: Phylogenetic tree creation ###
 qiime phylogeny align-to-tree-mafft-fasttree \
   --i-sequences Yanomani_rep-seqs.qza \
   --output-dir Yanomani_phylogeny-align-to-tree-mafft-fasttree
-  
-  
-####filtering samples to include only adults, non-use of antibiotics, one time collection and other factors that could influence the oral microbiome
 
- ###filtering out the infants 
-  
-  qiime feature-table filter-samples \
-  --i-table Yanomani_table-deblur.qza \
+### Step 7: Filtering by metadata ###
+# Filter samples to include adults only
+qiime feature-table filter-samples \
+  --i-table Yanomani_table.qza \
   --m-metadata-file Yanomani_metadata.txt \
   --p-where '[adult_infant] IS "adult"' \
   --o-filtered-table Yanomani_Age_Filtered.qza
 
-##Summarizing##
-qiime feature-table summarize \
-  --i-table Yanomani_Age_Filtered.qza \
---m-sample-metadata-file Yanomani_metadata.txt \
-  --o-visualization Yanomani_Age_Filtered.qzv
-
-
-  ###filtering out the non-salvia samples
-
+# Filter for human-oral samples only
 qiime feature-table filter-samples \
   --i-table Yanomani_Age_Filtered.qza \
   --m-metadata-file Yanomani_metadata.txt \
   --p-where '[env_package] IS "human-oral"' \
   --o-filtered-table Yanomani_Saliva_Filtered.qza
-  
-  #####visualizing
-  
-   qiime feature-table summarize \
-  --i-table Yanomani_Saliva_Filtered.qza \
-  --m-sample-metadata-file Yanomani_metadata.txt \
-  --o-visualization Yanomani_Saliva_Filtered.qzv
-  
-###filtering to ensure one collection time
-##All samples were collected on the same day
 
-###filtering to account for antibiotics
-##No information on antibiotics. 
-
-
- ###filtering out singletons. These are features that appear in only one sample
+# Remove singletons (features appearing in only one sample)
 qiime feature-table filter-features \
-  --i-table Yanomani_Saliva_Filtered.qza  \
+  --i-table Yanomani_Saliva_Filtered.qza \
   --p-min-frequency 5 \
   --o-filtered-table table_no_singletons.qza
 
- qiime feature-table summarize \
-  --i-table table_no_singletons.qza \
-  --m-sample-metadata-file Yanomani_metadata.txt \
-  --o-visualization table_no_singletons.qzv
- 
-  ###filtering out features that have a frequency less than 5
-  
+# Retain features present in at least 5 samples
 qiime feature-table filter-features \
   --i-table table_no_singletons.qza \
   --p-min-samples 5 \
-  --o-filtered-table table_five_freq.qza
+  --o-filtered-table Yanomami_final.qza
 
- qiime feature-table summarize \
-  --i-table table_five_freq.qza \
-  --m-sample-metadata-file Yanomani_metadata.txt \
-  --o-visualization table_five_freq.qzv
-  
-mv table_five_freq.qza Yanomami_final.qza
+########################################
+# TANZANIA DATA WRANGLING
+########################################
 
+# Data downloaded from ENA: https://www.ebi.ac.uk/ena/browser/view/PRJEB14941
 
+### Step 1: Download and merge raw data ###
+# Fetch sequencing run info
+esearch -db sra -query "PRJEB14941" | efetch -format runinfo > Tanzania_runinfo.csv
 
-##########################################################################################
-##Tanzania data wrangling.
-#Data downloaded from ENA- https://www.ebi.ac.uk/ena/browser/view/PRJEB14941
-
-#####QIIME2 2022.8###
-
-#Tanzania analysis
-#pulling the raw file from NCBI and merging into one single fastq
-
-PRJNA=PRJEB14941
-# Get sequencing run info and save onto a CSV file
-esearch -db sra -query "$PRJNA" | efetch -format runinfo > Tanzania_runinfo.csv
- 
-# Download assembled genome data
-esearch -db nucleotide -query "$PRJNA" | efetch -format fasta > Tanzaniagenomes.fa
- 
-# Checking how many experimental run names-ids
-cat Tanzania_runinfo.csv | csvcut -c Run | wc -l
-# 1119
- 
-# Checking the top 5 runs, using -6 because of the header
-cat Tanzania_runinfo.csv | csvcut -c Run | head -6
- 
-# Iterate through the Accession_number.txt file and download using fastq-dump
+# Download fastq files
 while read -r SRR; do
   fastq-dump --split-3 "$SRR" > "$SRR"
 done < Accession_number.txt
- 
-#merging the fastq
+
+# Merge fastq files into one
 cat *.fastq > Tanzania.fastq
 
-
-
-###############################################################################
-
-#Pulling into qiime2
-
-removing .fastq extension from my naming 
-for i in $(ls *.fastq); do mv $i ${i%.*}; done
-
-for filename in *; do 
-    [ -f "$filename" ] || continue
-    mv "$filename" "${filename//_/.}_V4_L001_R1_001.fastq"
-    done
-    
-gzip *.fastq
-
-
+### Step 2: Import into QIIME ###
 qiime tools import \
   --type 'SampleData[SequencesWithQuality]' \
   --input-path Tanzania_copy \
   --input-format CasavaOneEightSingleLanePerSampleDirFmt \
   --output-path Tanzania_demux-single-end.qza
 
-########AFTER IMPORTING INTO QIIME########3
-
-##my samples were already demultiplexd#
-##Visualizing the imported data 
+# Visualize demultiplexing summary
 qiime demux summarize \
   --i-data Tanzania_demux-single-end.qza \
   --o-visualization Tanzania_demux.qzv
 
-##deblur
-
+### Step 3: Quality filtering and denoising ###
 qiime quality-filter q-score \
   --i-demux Tanzania_demux-single-end.qza \
   --o-filtered-sequences Tanzania_demux-filtered.qza \
   --o-filter-stats Tanzania_demux-filter-stats.qza
-  
+
 qiime deblur denoise-16S \
   --i-demultiplexed-seqs Tanzania_demux-filtered.qza \
   --p-trim-length 150 \
@@ -208,80 +146,75 @@ qiime deblur denoise-16S \
   --o-representative-sequences Tanzania_rep-seqs-deblur.qza \
   --o-table Tanzania_table-deblur.qza \
   --o-stats Tanzania_deblur-stats.qza
-  
-  
-qiime metadata tabulate \
-  --m-input-file Tanzania_demux-filter-stats.qza \
-  --o-visualization Tanzania_demux-filter-stats.qzv
-qiime deblur visualize-stats \
-  --i-deblur-stats Tanzania_deblur-stats.qza \
-  --o-visualization Tanzania_deblur-stats.qzv
-  
-  
+
+# Generate and visualize feature table
 qiime feature-table summarize \
   --i-table Tanzania_table-deblur.qza \
   --m-sample-metadata-file Tanzania_metadata.txt \
   --o-visualization Tanzania_table.qzv
-qiime feature-table tabulate-seqs \
-  --i-data Tanzania_rep-seqs-deblur.qza \
-  --o-visualization Tanzania_rep-seqs.qzv
 
+
+
+
+##########################################################################################
+##Tanzania data wrangling.
 ####NOVEMBER TWO,2023####
-#see Tanzania_raw_file_download.sh script which was gotten from ENA##
+#Data downloaded from ENA- https://www.ebi.ac.uk/ena/browser/view/PRJEB14941
 
-###not all the files downloaded. I had a total of  1081 samples##
-  
-##created a python file 
- nano create_manifest.py
+#####QIIME2 2022.8##
+# Reference to the script used for initial file downloads:
+# See "Tanzania_raw_file_download.sh" script (obtained from ENA).
 
-##Code below was put in the nano file to create my manifest file
-  
-#import os
+# Note: Not all files downloaded successfully. Total downloaded: 1081 samples.
 
-data_directory ="/Users/ija5171/BATWA/study_raw_data_11492_020223-123348/Worldwide_analyses/WW_New/Tanzania/Tanzania_raw_files"
-manifest_file ="manifest.tsv"
+# Step 1: Create a Python script to generate a manifest file
+nano create_manifest.py
 
+# Code placed in "create_manifest.py" to create the manifest file:
+# ---------------------------------------------------------------
+# Imports the required library
 import os
 
-data_directory ="/Users/ija5171/BATWA/study_raw_data_11492_020223-123348/Worldwide_analyses/WW_New/Tanzania/Tanzania_raw_files"
-manifest_file ="manifest.tsv"
+# Directory containing raw FASTQ files
+data_directory = "/Users/ija5171/BATWA/study_raw_data_11492_020223-123348/Worldwide_analyses/WW_New/Tanzania/Tanzania_raw_files"
+# Output manifest file
+manifest_file = "manifest.tsv"
 
+# Writes the manifest file
 with open(manifest_file, 'w') as f:
-    f.write("sample-id\tabsolute-filepath\n")
+    f.write("sample-id\tabsolute-filepath\n")  # Header
     for filename in os.listdir(data_directory):
-        if filename.endswith(".fastq.gz"):
-            sample_id = filename  # Use the file name as the sample ID
+        if filename.endswith(".fastq.gz"):  # Selects FASTQ files
+            sample_id = filename  # Uses file name as sample ID
             file_path = os.path.join(data_directory, filename)
             f.write(f"{sample_id}\t{file_path}\n")
+# ---------------------------------------------------------------
 
-
-
-##ran my python script 
+# Step 2: Run the Python script
 python create_manifest.py
 
-## Importing the files with the SingleEndFastqManifestPhred33V2 format
-       
+# Step 3: Import FASTQ files using the SingleEndFastqManifestPhred33V2 format
 qiime tools import \
   --type 'SampleData[SequencesWithQuality]' \
   --input-path manifest.tsv \
   --output-path single-end-demux.qza \
   --input-format SingleEndFastqManifestPhred33V2
 
-#Imported manifest.tsv as SingleEndFastqManifestPhred33V2 to single-end-demux.qza
+# Output: Successfully imported "manifest.tsv" as SingleEndFastqManifestPhred33V2 to "single-end-demux.qza"
 
-######Downstream analyses
-
-##summarizing my reads##
+# Step 4: Summarize raw sequencing reads
 qiime demux summarize \
   --i-data single-end-demux.qza \
   --o-visualization Tanzania_demux.qzv
 
-##Deblur##
+# Step 5: Quality filtering and denoising using Deblur
+# Quality filtering
 qiime quality-filter q-score \
   --i-demux single-end-demux.qza \
   --o-filtered-sequences demux-filtered.qza \
   --o-filter-stats Tanzania_demux-filter-stats.qza
 
+# Deblur denoising
 qiime deblur denoise-16S \
   --i-demultiplexed-seqs demux-filtered.qza \
   --p-trim-length 150 \
@@ -290,295 +223,258 @@ qiime deblur denoise-16S \
   --o-table Tanzania_table-deblur.qza \
   --o-stats Tanzania_deblur-stats.qza
 
+# Visualize filtering and denoising statistics
 qiime metadata tabulate \
   --m-input-file Tanzania_demux-filter-stats.qza \
   --o-visualization Tanzania_demux-filter-stats.qzv
+
 qiime deblur visualize-stats \
   --i-deblur-stats Tanzania_deblur-stats.qza \
   --o-visualization Tanzania_deblur-stats.qzv
-  
 
-##Generating feature table##
+# Step 6: Generate and summarize the feature table
 qiime feature-table summarize \
   --i-table Tanzania_table-deblur.qza \
---m-sample-metadata-file Tanzania_metadata.txt \
+  --m-sample-metadata-file Tanzania_metadata.txt \
   --o-visualization Tanzania_table.qzv
+
 qiime feature-table tabulate-seqs \
   --i-data Tanzania_rep-seqs-deblur.qza \
   --o-visualization Tanzania_rep-seqs.qzv
 
-##Generate a tree for phylogenetic diversity analyses
+# Step 7: Generate a phylogenetic tree for diversity analyses
 qiime phylogeny align-to-tree-mafft-fasttree \
   --i-sequences Tanzania_rep-seqs-deblur.qza \
   --output-dir phylogeny-align-to-tree-mafft-fasttree
-  
 
+# Step 8: Perform core diversity metrics
 qiime diversity core-metrics-phylogenetic \
   --i-phylogeny phylogeny-align-to-tree-mafft-fasttree/rooted_tree.qza \
   --i-table Tanzania_table-deblur.qza \
   --p-sampling-depth 1107 \
   --m-metadata-file Tanzania_metadata.txt \
   --output-dir Tanzania_diversity-core-metrics-phylogenetic
-	
-	
-####filtering samples to include only adults, non-use of antibiotics, one time collection and other factors that could influence the oral microbiome
 
-
- ###filtering out the infants 
-  
-  qiime feature-table filter-samples \
+# Step 9: Filter samples based on metadata criteria
+# (a) Include only adults
+qiime feature-table filter-samples \
   --i-table Tanzania_table-deblur.qza \
   --m-metadata-file Tanzania_metadata.txt \
   --p-where '[adult_infant] IS "adult"' \
   --o-filtered-table Age_Filtered_Tanzanian.qza
 
-##Summarizing##
 qiime feature-table summarize \
   --i-table Age_Filtered_Tanzanian.qza \
---m-sample-metadata-file Tanzania_metadata.txt \
+  --m-sample-metadata-file Tanzania_metadata.txt \
   --o-visualization Age_Filtered_Tanzanian.qzv
 
-
-  ###filtering out the non-salvia samples
-
+# (b) Include only saliva samples
 qiime feature-table filter-samples \
   --i-table Age_Filtered_Tanzanian.qza \
   --m-metadata-file Tanzania_metadata.txt \
   --p-where '[env_material] IS "saliva"' \
   --o-filtered-table Saliva_Filtered_Tanzanian.qza
-  
-  #####visualizing
-  
-   qiime feature-table summarize \
+
+qiime feature-table summarize \
   --i-table Saliva_Filtered_Tanzanian.qza \
   --m-sample-metadata-file Tanzania_metadata.txt \
   --o-visualization Saliva_Filtered_Tanzanian.qzv
-  
-  
-###filtering to ensure one collection time-2013
 
+# (c) Filter by collection year (2013)
 qiime feature-table filter-samples \
   --i-table Saliva_Filtered_Tanzanian.qza \
   --m-metadata-file Tanzania_metadata.txt \
   --p-where '[collection_year] IS "2013"' \
-  --o-filtered-table time_Filtered_Tanzanian.qza
+  --o-filtered-table Time_Filtered_Tanzanian.qza
 
-  
-  ###Visualizing 
-   qiime feature-table summarize \
-  --i-table time_Filtered_Tanzanian.qza \
+qiime feature-table summarize \
+  --i-table Time_Filtered_Tanzanian.qza \
   --m-sample-metadata-file Tanzania_metadata.txt \
   --o-visualization Time_Filtered_Tanzanian.qzv
 
-###filtering to account for antibiotics
-
+# (d) Exclude samples with antibiotic use
 qiime feature-table filter-samples \
-  --i-table time_Filtered_Tanzanian.qza \
+  --i-table Time_Filtered_Tanzanian.qza \
   --m-metadata-file Tanzania_metadata.txt \
   --p-where '[antibiotic] IS "not applicable"' \
-  --o-filtered-table antibiotics_Filtered_Tanzanian.qza
+  --o-filtered-table Antibiotics_Filtered_Tanzanian.qza
 
-  
-  ###Visualizing 
-   qiime feature-table summarize \
-  --i-table antibiotics_Filtered_Tanzanian.qza \
+qiime feature-table summarize \
+  --i-table Antibiotics_Filtered_Tanzanian.qza \
   --m-sample-metadata-file Tanzania_metadata.txt \
-  --o-visualization antibiotics_Filtered_Tanzanian.qzv
-  
-##some were filtered out because there was no information about anti-biotics
+  --o-visualization Antibiotics_Filtered_Tanzanian.qzv
 
- ###filtering out singletons. These are features that appear in only one sample
+# Step 10: Remove singletons and low-frequency features
+# (a) Remove singletons
 qiime feature-table filter-features \
-  --i-table antibiotics_Filtered_Tanzanian.qza \
+  --i-table Antibiotics_Filtered_Tanzanian.qza \
   --p-min-frequency 5 \
   --o-filtered-table table_no_singletons.qza
 
- qiime feature-table summarize \
+qiime feature-table summarize \
   --i-table table_no_singletons.qza \
   --m-sample-metadata-file Tanzania_metadata.txt \
   --o-visualization table_no_singletons.qzv
- 
-  ###filtering out features that have a frequency less than 5
-  
+
+# (b) Remove features appearing in fewer than 5 samples
 qiime feature-table filter-features \
   --i-table table_no_singletons.qza \
   --p-min-samples 5 \
   --o-filtered-table table_five_freq.qza
 
- qiime feature-table summarize \
+qiime feature-table summarize \
   --i-table table_five_freq.qza \
   --m-sample-metadata-file Tanzania_metadata.txt \
   --o-visualization table_five_freq.qzv
-  
+
+# Rename final filtered table
 mv table_five_freq.qza Tanzania_final.qza
 
-#####UGANDAN data wrangling
-###importing raw data into qiime2 using the qiime2 moving pictures EMP protocol” multiplexed paired-end fastq
 
-##importing into qza format
-  qiime tools import \
+##### UGANDAN Data Wrangling
+# Importing raw data into Qiime2 using the EMP protocol for multiplexed paired-end FASTQ files
+
+## Step 1: Import raw paired-end sequences into QZA format (Qiime2 artifact)
+qiime tools import \
  --type EMPPairedEndSequences \
- --input-path Batwa-paired-end-sequences \
-  --output-path Batwa-paired-end-sequences.qza
-  
+ --input-path Batwa-paired-end-sequences \ # Directory containing the raw sequence data
+ --output-path Batwa-paired-end-sequences.qza  # Output artifact in .qza format
 
-##proceeded to demultiplex
+## Step 2: Demultiplex sequences based on barcode sequences and metadata
 qiime demux emp-paired \
   --i-seqs Batwa-paired-end-sequences.qza \
-  --m-barcodes-file Batwa_metadata2.txt\
-  --m-barcodes-column barcode-sequence \
-  --o-per-sample-sequences Batwa.qza \
-  --o-error-correction-details Batwa-details.qza
-  
+  --m-barcodes-file Batwa_metadata2.txt \  # Metadata file with barcode information
+  --m-barcodes-column barcode-sequence \  # Column in metadata with barcode sequences
+  --o-per-sample-sequences Batwa.qza \  # Output: Demultiplexed sequences
+  --o-error-correction-details Batwa-details.qza  # Output: Error correction details
 
-##summarizing the demultiplexed data and visualizing 
+## Step 3: Summarize and visualize the demultiplexed data
 qiime demux summarize \
   --i-data Batwa.qza \
-  --o-visualization Batwa.qzv
-  
-##Saved Visualization to: Batwa.qzv
+  --o-visualization Batwa.qzv  # Output: Visualization file
 
-###sequence quality control and feature table generation.
+## Step 4: Quality control on sequences (filtering based on quality scores)
 qiime quality-filter q-score \
   --i-demux Batwa.qza \
-  --o-filtered-sequences Batwa-filtered.qza \
-  --o-filter-stats Batwa-filter-stats.qza
+  --o-filtered-sequences Batwa-filtered.qza \  # Output: Filtered sequences
+  --o-filter-stats Batwa-filter-stats.qza  # Output: Filtering statistics
 
-###Deblur
+## Step 5: Sequence denoising using Deblur (16S rRNA gene)
 qiime deblur denoise-16S \
   --i-demultiplexed-seqs Batwa-filtered.qza \
-  --p-trim-length 150 \
-  --p-sample-stats \
-  --o-representative-sequences Batwa_rep-seqs-deblur.qza \
-  --o-table Batwa_table-deblur.qza \
-  --o-stats Batwa_deblur-stats.qza
-  
-##visualizing the deblur stats 
- qiime metadata tabulate \
+  --p-trim-length 150 \  # Trim sequences to 150 bp
+  --p-sample-stats \  # Output sample-level statistics
+  --o-representative-sequences Batwa_rep-seqs-deblur.qza \  # Output: Representative sequences
+  --o-table Batwa_table-deblur.qza \  # Output: Feature table
+  --o-stats Batwa_deblur-stats.qza  # Output: Denoising statistics
+
+## Step 6: Visualize Deblur statistics
+qiime metadata tabulate \
   --m-input-file Batwa-filter-stats.qza \
-  --o-visualization Batwa_demux-filter-stats.qzv
+  --o-visualization Batwa_demux-filter-stats.qzv  # Visualization for filter stats
 qiime deblur visualize-stats \
   --i-deblur-stats Batwa_deblur-stats.qza \
-  --o-visualization Batwa_deblur-stats.qzv
-  
+  --o-visualization Batwa_deblur-stats.qzv  # Visualization for Deblur stats
 
+## Rename intermediate files for easier access
 mv Batwa_rep-seqs-deblur.qza Batwa_rep-seqs.qza
 mv Batwa_table-deblur.qza Batwa_table.qza
 
-###creating the feature table
+## Step 7: Create and visualize the feature table
 qiime feature-table summarize \
   --i-table Batwa_table.qza \
-  --o-visualization Batwa_table.qzv \
-  --m-sample-metadata-file Batwa_metadata2.txt
+  --o-visualization Batwa_table.qzv \  # Visualization of feature table
+  --m-sample-metadata-file Batwa_metadata2.txt  # Metadata file for mapping to the feature table
 qiime feature-table tabulate-seqs \
   --i-data Batwa_rep-seqs.qza \
-  --o-visualization Batwa_rep-seqs.qzv
+  --o-visualization Batwa_rep-seqs.qzv  # Visualization of representative sequences
 
-###creating a phylogentic tree
+## Step 8: Create a phylogenetic tree for downstream analyses
 qiime phylogeny align-to-tree-mafft-fasttree \
   --i-sequences Batwa_rep-seqs.qza \
-  --output-dir Batwa_phylogeny-align-to-tree-mafft-fasttree
+  --output-dir Batwa_phylogeny-align-to-tree-mafft-fasttree  # Output directory for the phylogenetic tree
 
-
-  ##filtering out the EBC2A sitting in the middle of biological samples 
-  qiime feature-table filter-samples \
+## Step 9: Filter out biological samples containing contaminants (e.g., EBC2A)
+qiime feature-table filter-samples \
   --i-table Batwa_table.qza \
   --m-metadata-file Batwa_metadata2.txt \
-  --p-where '[sample_name] IS NOT "11492.A19461.EBC2a"' \
-  --o-filtered-table Filtered_Batwa_table.qza
-  
-  ##creating a visualization for the filtered table
+  --p-where '[sample_name] IS NOT "11492.A19461.EBC2a"' \  # Remove EBC2A sample
+  --o-filtered-table Filtered_Batwa_table.qza  # Output: Filtered feature table
+
+## Step 10: Summarize the filtered feature table
 qiime feature-table summarize \
   --i-table Filtered_Batwa_table.qza \
   --m-sample-metadata-file Batwa_metadata2.txt \
-  --o-visualization Filtered_Batwa_table.qzv
+  --o-visualization Filtered_Batwa_table.qzv  # Visualization for the filtered table
 
-##proceeded to decontam in R
+## Step 11: Decontam process in R (external step, not in Qiime2)
 
-##converting my post decontam file to a Biomfile
+## Step 12: Convert post-decontam data to BIOM format
+biom convert -i SPECIES-decontam-90-11SEPT23.60.txt -o New_Batwa_6.biom --table-type="OTU table" --to-hdf5  # BIOM file conversion
 
-biom convert -i SPECIES-decontam-90-11SEPT23.60.txt -o New_Batwa_6.biom --table-type="OTU table" --to-hdf5
-
-##Converting to qza
+## Step 13: Import the BIOM table into Qiime2 format (QZA)
 qiime tools import \
   --input-path New_Batwa_6.biom \
   --type 'FeatureTable[Frequency]' \
   --input-format BIOMV210Format \
-  --output-path New_Batwa_6_table.qza
-  
-##visualizing the feature table post decontam
+  --output-path New_Batwa_6_table.qza  # Output: Feature table in QZA format
+
+## Step 14: Visualize the post-decontam feature table
 qiime feature-table summarize \
   --i-table New_Batwa_6_table.qza \
-  --o-visualization New_Batwa.biom_table_6.qzv \
-  --m-sample-metadata-file Batwa_metadata2.txt
+  --o-visualization New_Batwa.biom_table_6.qzv  # Visualization for the feature table
 
-##Filtering out controls (EBC1)
+## Step 15: Filter out control samples (EBC1, EBC2)
 qiime feature-table filter-samples \
   --i-table New_Batwa_6_table.qza \
   --m-metadata-file Batwa_metadata2.txt \
-  --p-where '[SampleType] IS NOT "EBC1"' \
-  --o-filtered-table New_6_BatwaBioSamplesOnly.qza    
+  --p-where '[SampleType] IS NOT "EBC1"' \  # Filter out EBC1 control samples
+  --o-filtered-table New_6_BatwaBioSamplesOnly.qza  # Output: Filtered table without EBC1
 
-##Filtering out controls (EBC2)
 qiime feature-table filter-samples \
-  --i-table New_6_BatwaBioSamplesOnly.qza   \
+  --i-table New_6_BatwaBioSamplesOnly.qza \
   --m-metadata-file Batwa_metadata2.txt \
-  --p-where '[SampleType] IS NOT "EBC2"' \
-  --o-filtered-table New_6_BatwaBioSamplesOnlyfinal.qza  
+  --p-where '[SampleType] IS NOT "EBC2"' \  # Filter out EBC2 control samples
+  --o-filtered-table New_6_BatwaBioSamplesOnlyfinal.qza  # Output: Final filtered table
 
-
-##Filtering out PCR
+## Step 16: Further filtering samples (PCR, specific samples)
 qiime feature-table filter-samples \
-  --i-table New_6_BatwaBioSamplesOnlyfinal.qza    \
+  --i-table New_6_BatwaBioSamplesOnlyfinal.qza \
   --m-metadata-file Batwa_metadata2.txt \
   --p-where '[SampleType] IS NOT "PCR"' \
-  --o-filtered-table New_6_no_PCR_BatwaBioSamplesOnlyfinal.qza   
-  
- ###filtering out individual 11492.A19489.TW99 who had 1071 feature counts was full of contaminants 
- 
- qiime feature-table filter-samples \
-  --i-table New_6_no_PCR_BatwaBioSamplesOnlyfinal.qza   \
+  --o-filtered-table New_6_no_PCR_BatwaBioSamplesOnlyfinal.qza  # Output: Filtered table without PCR
+
+# Additional filtering to remove specific contaminated or duplicate samples
+qiime feature-table filter-samples \
+  --i-table New_6_no_PCR_BatwaBioSamplesOnlyfinal.qza \
   --m-metadata-file Batwa_metadata2.txt \
   --p-where '[sample_name] IS NOT "11492.A19489.TW99"' \
-  --o-filtered-table New_6_no_PCR_NoTW99_BatwaBioSamplesOnlyfinal.qza    
-  
-  
-  ###Filtering out the duplicate sample 11492.A19451.KG59e
+  --o-filtered-table New_6_no_PCR_NoTW99_BatwaBioSamplesOnlyfinal.qza  # Remove contaminated sample
 
- qiime feature-table filter-samples \
-  --i-table New_6_no_PCR_NoTW99_BatwaBioSamplesOnlyfinal.qza   \
+qiime feature-table filter-samples \
+  --i-table New_6_no_PCR_NoTW99_BatwaBioSamplesOnlyfinal.qza \
   --m-metadata-file Batwa_metadata2.txt \
   --p-where '[sample_name] IS NOT "11492.A19451.KG59e"' \
-  --o-filtered-table No_duplicate_BatwaBioSamplesOnlyfinal.qza
-  
- qiime feature-table filter-samples \
-  --i-table No_duplicate_BatwaBioSamplesOnlyfinal.qza   \
-  --m-metadata-file Batwa_metadata2.txt \
-  --p-where '[sample_name] IS NOT "11492.A19450.TW51"' \
-  --o-filtered-table New_6_no_PCR_NoTW99_NOTW51__BatwaBioSamplesOnlyfinal.qza   
-  
-  ###Filtering out chloroplast and mitochrondia
-  qiime taxa filter-table \
-  --i-table New_6_no_PCR_NoTW99_NOTW51__BatwaBioSamplesOnlyfinal.qza\
-  --i-taxonomy taxonomy.qza \
-  --p-exclude mitochondria,chloroplast \
-  --o-filtered-table New_C_M_6_BatwaBioSamplesOnlyfinal.qza
-  
-    qiime feature-table summarize \
-  --i-table New_C_M_6_BatwaBioSamplesOnlyfinal.qza \
- --m-sample-metadata-file Batwa_metadata2.txt \
-  --o-visualization New_C_M_6_BatwaBioSamplesOnlyfinal.qzv
+  --o-filtered-table No_duplicate_BatwaBioSamplesOnlyfinal.qza  # Remove duplicate sample
 
-  #########Filtering out features that have a frequency less than 5
+## Step 17: Filter out chloroplast and mitochondrial sequences
+qiime taxa filter-table \
+  --i-table New_6_no_PCR_NoTW99_NOTW51__BatwaBioSamplesOnlyfinal.qza \
+  --i-taxonomy taxonomy.qza \  # Taxonomy file to identify chloroplast/mitochondria
+  --p-exclude mitochondria,chloroplast \  # Exclude these taxa
+  --o-filtered-table New_C_M_6_BatwaBioSamplesOnlyfinal.qza  # Output: Filtered feature table without chloroplast/mitochondria
+
+## Step 18: Final filtering to remove features with frequency less than 5
 qiime feature-table filter-features \
   --i-table New_C_M_6_BatwaBioSamplesOnlyfinal.qza \
-  --p-min-frequency 5 \
-  --o-filtered-table table_five_freq.qza
+  --p-min-frequency 5 \  # Remove features with frequency less than 5
+  --o-filtered-table table_five_freq.qza  # Output: Filtered table with features >= 5
 
+## Step 19: Summarize the final filtered table
 qiime feature-table summarize \
   --i-table table_five_freq.qza \
-    --m-sample-metadata-file Batwa_metadata2.txt \
-  --o-visualization table_five_freq_summary.qzv
+  --m-sample-metadata-file Batwa_metadata2.txt \
+  --o-visualization table_five_freq_summary.qzv  # Final visualization of the filtered feature table
 
 
 
